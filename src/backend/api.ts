@@ -168,7 +168,7 @@ class ApiService {
 
   async getGrowthData() {
     // Import cashflow functions
-    const { getCashflowAggregation, getCashflowTransactions, formatCurrency } = await import('./cashflow-api');
+    const { getCashflowAggregation, getCashflowTransactions, formatCurrency, parseCurrency } = await import('./cashflow-api');
 
     const [executions, cashflowAgg, transactions] = await Promise.all([
       this.supabaseFetch<Execution[]>('executions', { limit: 1000 }),
@@ -188,14 +188,20 @@ class ApiService {
       { label: 'Services Revenue', value: formatCurrency(cashflowAgg.total_revenue * 0.10) }, // Estimate 10%
     ];
 
-    // Build wins from recent transactions
-    const wins = transactions.slice(0, 10).map(tx => ({
-      id: tx.id,
-      title: `${tx.guest} - ${tx.code}`,
-      value: tx.total_amount,
-      date: tx.collection_date || tx.created_at,
-      status: 'Captured' as 'Approved' | 'Captured' | 'Verified'
-    }));
+    // Build wins from transactions above € 1.000
+    const wins = transactions
+      .filter(tx => {
+        const amount = parseCurrency(tx.total_amount);
+        return amount >= 1000;
+      })
+      .slice(0, 10)
+      .map(tx => ({
+        id: tx.id.slice(0, 8), // Short reference
+        title: `${tx.guest} - ${tx.code}`,
+        value: tx.total_amount,
+        date: tx.collection_date || tx.created_at,
+        status: 'Captured' as 'Approved' | 'Captured' | 'Verified'
+      }));
 
     return {
       kpis,
