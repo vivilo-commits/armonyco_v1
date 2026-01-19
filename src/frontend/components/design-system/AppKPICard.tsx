@@ -22,7 +22,7 @@ export const AppKPICard: React.FC<AppKPICardProps> = ({ kpi, variant = 'dark' })
           </div>
 
           <div className="flex-1 flex flex-col justify-center">
-            <div className="text-2xl md:text-3xl font-light text-white tracking-tighter whitespace-nowrap mb-2 group-hover:translate-x-1 transition-transform duration-700 ease-out">
+            <div className="text-xl md:text-2xl font-light text-white tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis mb-2 group-hover:translate-x-1 transition-transform duration-700 ease-out">
               {kpi.value}
             </div>
           </div>
