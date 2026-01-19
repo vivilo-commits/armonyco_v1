@@ -114,14 +114,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
 
             // Fetch membership
-            const { data: membershipData } = await supabase
+            const { data: memberships } = await supabase
                 .from('organization_members')
                 .select('*')
                 .eq('user_id', userId)
-                .limit(1)
-                .single();
+                .order('created_at', { ascending: false })
+                .limit(1);
 
-            if (membershipData) {
+            if (memberships && memberships.length > 0) {
+                const membershipData = memberships[0];
                 setMembership(membershipData);
 
                 // Fetch organization
