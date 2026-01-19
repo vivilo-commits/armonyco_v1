@@ -133,8 +133,9 @@ export async function getCashflowForPeriod(
 }
 
 /**
- * Format currency for display
+ * Format currency for display (European format with dots for thousands)
+ * Example: 179917.92 → "€ 179.917,92"
  */
 export function formatCurrency(value: number): string {
-    return `€ ${value.toFixed(2).replace('.', ',')}`;
+    return `€ ${value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
