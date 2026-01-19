@@ -128,10 +128,10 @@ const AppContent: React.FC = () => {
 
   // Auto-switch to dashboard if logged in
   React.useEffect(() => {
-    if (user && currentView === View.LANDING) {
+    if (user && currentView === View.LANDING && (!showLogin && !showSignUp)) {
       setCurrentView(View.DASHBOARD);
     }
-  }, [user, currentView]);
+  }, [user, currentView, showLogin, showSignUp]);
 
   // Simplified loading - only show during initial auth OR logout
   if (authLoading) {
@@ -177,7 +177,7 @@ const AppContent: React.FC = () => {
     }
   };
 
-  if (currentView === View.LANDING && !user) {
+  if (currentView === View.LANDING) {
     return (
       <LanguageProvider>
         <Suspense
@@ -199,10 +199,6 @@ const AppContent: React.FC = () => {
         <SignUpModal
           isOpen={showSignUp}
           onClose={() => setShowSignUp(false)}
-          onSuccess={() => {
-            setShowSignUp(false);
-            setShowLogin(true);
-          }}
         />
       </LanguageProvider>
     );
@@ -250,10 +246,6 @@ const AppContent: React.FC = () => {
             <SignUpModal
               isOpen={showSignUp}
               onClose={() => setShowSignUp(false)}
-              onSuccess={() => {
-                setShowSignUp(false);
-                setShowLogin(true);
-              }}
             />
             <WelcomeModal isOpen={showWelcomeModal} onClose={() => setShowWelcomeModal(false)} />
             <LogoutModal
