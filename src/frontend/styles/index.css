@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+@theme {
+  /* Armonyco Brand Colors */
+  --color-gold-start: #bd923d;
+  --color-gold-mid-1: #d4af37;
+  --color-gold-mid-2: #f5d47c;
+  --color-gold-end: #a67c28;
+
+  /* Tiered Stone Palette */
+  --color-stone-50: #F9FAF9;
+  --color-stone-100: #F0F0EE;
+  --color-stone-200: #E5E5E2;
+  --color-stone-300: #D6D6D3;
+  --color-stone-400: #A8A8A6;
+  --color-stone-500: #787875;
+  --color-stone-600: #575754;
+  --color-stone-700: #444442;
+  --color-stone-800: #292928;
+  --color-stone-900: #151514;
+
+  /* Premium Shadows */
+  --shadow-premium: 0 4px 24px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-gold-glow: 0 0 20px rgba(212, 175, 55, 0.3);
+  --shadow-gold-glow-lg: 0 0 40px rgba(212, 175, 55, 0.6);
+}
+
+:root {
+  /* Gradients */
+  --background-image-gold-gradient: linear-gradient(90deg,
+      #bd923d,
+      #d4af37,
+      #f5d47c,
+      #d4af37,
+      #bd923d);
+}
+
+body {
+  background-color: #F9FAF9;
+  color: #151514;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: "Inter", system-ui, sans-serif;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes verticalMarquee {
+  0% {
+    transform: translateY(0%);
+  }
+
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+@layer utilities {
+  .gold-gradient {
+    background: var(--background-image-gold-gradient);
+  }
+
+  .text-gold-gradient {
+    background: var(--background-image-gold-gradient);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+    display: inline-block;
+  }
+
+  .glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-dark {
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+}
+
+
+
+/* Premium scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E5E5E2;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #D6D6D3;
+}
+
+/* Global cursor pointer for clickable elements */
+button,
+a,
+[role="button"],
+[onclick],
+input[type="button"],
+input[type="submit"],
+input[type="reset"],
+select {
+  cursor: pointer !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
