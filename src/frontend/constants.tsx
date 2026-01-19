@@ -42,58 +42,58 @@ export const LANGUAGES = [
 // PLANS
 export const PLANS_DATA: Plan[] = [
     {
-        id: 'pro',
-        name: 'Pro',
+        id: 'starter',
+        name: 'Starter',
         tag: 'ESSENTIAL',
         units: 'Up to 50 units',
         price: '€249',
         period: 'per month',
         includedCredits: 25000,
         features: [
-            '25,000 Armo Credits included',
+            '25,000 ArmoCredits™ included per month',
             'Full Governance Suite',
             'PMS & WhatsApp Integration',
             'Standard AI Models',
             'Dashboard & Growth KPIs'
         ],
-        cta: 'Select Pro',
+        cta: 'Select Starter',
         stripePriceId: 'price_1SrGcDEwc5UbVBFjDnejgprL'
     },
     {
-        id: 'scale',
-        name: 'Scale',
+        id: 'pro',
+        name: 'Pro',
         tag: 'POPULAR',
         units: 'Up to 200 units',
         price: '€499',
         period: 'per month',
         includedCredits: 100000,
         features: [
-            '100,000 Armo Credits included',
+            '100,000 ArmoCredits™ included per month',
             'Multi-property Management',
             'Priority Escalation Handling',
             'Advanced AI Guardrails',
             'Historical Growth Analytics'
         ],
-        cta: 'Activate Scale',
+        cta: 'Activate Pro',
         popular: true,
         stripePriceId: 'price_1SrGcEEwc5UbVBFjMKzJV4pz'
     },
     {
-        id: 'enterprise',
-        name: 'Enterprise',
-        tag: 'SCALE',
+        id: 'elite',
+        name: 'Elite',
+        tag: 'MAX',
         units: 'Up to 500 units',
         price: '€999',
         period: 'per month',
         includedCredits: 250000,
         features: [
-            '250,000 Armo Credits included',
+            '250,000 ArmoCredits™ included per month',
             'Dedicated Workflow Logic',
             'Custom AI Tone of Voice',
             'Infinite PMS Syncing',
             'White-glove Support'
         ],
-        cta: 'Go Enterprise',
+        cta: 'Go Elite',
         stripePriceId: 'price_1SrGcEEwc5UbVBFjSqhLsjhS'
     },
     {

@@ -12,16 +12,20 @@ interface PlansProps {
 
 export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
   const [buying, setBuying] = useState(false);
-  const { organizationId } = useAuth();
+  const { organizationId, user } = useAuth();
 
   const handleBuyCredits = async () => {
-    if (!organizationId) return;
+    if (!organizationId || !user?.email) return;
     setBuying(true);
     try {
-      const { url } = await stripeApi.createCheckoutSession(
-        STRIPE_CONFIG.TIERS.TOP_UP.priceId,
-        organizationId
-      );
+      const { url } = await stripeApi.createCheckoutSession({
+        priceId: STRIPE_CONFIG.TIERS.TOP_UP.priceId,
+        organizationId,
+        email: user.email,
+        planName: STRIPE_CONFIG.TIERS.TOP_UP.name,
+        credits: STRIPE_CONFIG.TIERS.TOP_UP.credits,
+        mode: 'payment'
+      });
       window.location.href = url;
     } catch (error) {
       console.error('[PlansModal] Checkout failed:', error);
@@ -31,11 +35,19 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleSelectPlan = async (priceId?: string) => {
-    if (!priceId || !organizationId) return;
+  const handleSelectPlan = async (priceId?: string, planData?: typeof PLANS_DATA[0]) => {
+    if (!priceId || !organizationId || !user?.email) return;
     setBuying(true);
     try {
-      const { url } = await stripeApi.createCheckoutSession(priceId, organizationId);
+      const { url } = await stripeApi.createCheckoutSession({
+        priceId,
+        organizationId,
+        email: user.email,
+        planId: planData?.id,
+        planName: planData?.name,
+        credits: planData?.includedCredits,
+        mode: 'subscription'
+      });
       window.location.href = url;
     } catch (error) {
       console.error('[PlansModal] Plan checkout failed:', error);
@@ -110,7 +122,7 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
                 <div
                   className={`text-[10px] font-bold px-2 py-0.5 rounded-md border w-fit mb-4 ${isPopular ? 'bg-stone-800 border-stone-700 text-gold-gradient' : 'bg-stone-50 border-stone-100 text-stone-500'}`}
                 >
-                  {plan.includedCredits.toLocaleString()} ArmoCredits
+                  {plan.id === 'vip' ? 'Custom Tailored' : `${plan.includedCredits.toLocaleString()} ArmoCredits™`}
                 </div>
                 <div className="mb-4">
                   <div
@@ -151,7 +163,7 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
                 </div>
 
                 <button
-                  onClick={() => handleSelectPlan(plan.stripePriceId)}
+                  onClick={() => handleSelectPlan(plan.stripePriceId, plan)}
                   disabled={buying || !plan.stripePriceId}
                   className={`w-full py-3 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all ${isPopular ? 'bg-white text-stone-900 hover:bg-stone-50' : 'bg-stone-900 text-white hover:bg-stone-800 shadow-md'} disabled:opacity-50`}
                 >

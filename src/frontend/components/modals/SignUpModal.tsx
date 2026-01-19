@@ -98,9 +98,8 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
       if (signUpError) throw signUpError;
       if (!signUpData.user) throw new Error('User creation failed');
 
-      // Step 2: Retrieve organization_id created by handle_new_user trigger
-      // Wait a moment for the trigger to complete
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Organization, membership, entitlements and profile are created automatically
+      // by the /api/stripe/create-checkout endpoint when it receives the userId
 
       // Step 2: Create Stripe Checkout Session (Standard Plans)
       const selectedPlanData = PLANS_DATA.find(p => p.id === selectedPlan);
@@ -471,7 +470,7 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
                     >
                       {isCustom
                         ? 'Bespoke tailored'
-                        : `${plan.includedCredits.toLocaleString()} ArmoCredits™`}
+                        : `${plan.includedCredits.toLocaleString()} ArmoCredits™ per month`}
                     </div>
                   </button>
                 );

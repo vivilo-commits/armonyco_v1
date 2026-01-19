@@ -595,14 +595,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {PLANS_DATA.map((plan, i) => {
             const isPopular = plan.tag === 'POPULAR';
-            const isVIP = plan.id === 'enterprise';
+            const isVIP = plan.id === 'vip';
             const icons = [
               <Zap key={0} />,
               <Layers key={1} />,
               <ShieldCheck key={2} />,
               <Star key={3} />,
             ];
-            const labels = ['Entry Tier', 'Growth Tier', 'Scale Tier', 'Custom Tier'];
+            const labels = ['Starter Tier', 'Pro Tier', 'Elite Tier', 'VIP Tier'];
 
             return (
               <div

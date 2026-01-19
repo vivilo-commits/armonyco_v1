@@ -23,21 +23,27 @@ export const CREDITS_CONFIG = {
     TIERS: {
         STARTER: {
             name: 'Starter',
-            credits: 10000,
-            price_euros: 100,
-            price_cents: 10000,
+            credits: 25000,
+            price_euros: 249,
+            price_cents: 24900,
         },
-        PROFESSIONAL: {
-            name: 'Professional',
-            credits: 50000,
-            price_euros: 400,
-            price_cents: 40000,
+        PRO: {
+            name: 'Pro',
+            credits: 100000,
+            price_euros: 499,
+            price_cents: 49900,
         },
-        ENTERPRISE: {
-            name: 'Enterprise',
-            credits: 200000,
-            price_euros: 1500,
-            price_cents: 150000,
+        ELITE: {
+            name: 'Elite',
+            credits: 250000,
+            price_euros: 999,
+            price_cents: 99900,
+        },
+        VIP: {
+            name: 'VIP',
+            credits: 0,
+            price_euros: 0,
+            price_cents: 0,
         },
     },
 } as const;

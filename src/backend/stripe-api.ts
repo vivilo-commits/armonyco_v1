@@ -6,22 +6,22 @@ export interface StripeSessionResponse {
 
 export const STRIPE_CONFIG = {
     TIERS: {
-        PRO: {
+        STARTER: {
             id: 'prod_TouQuDBJCCCuBb',
             priceId: 'price_1SrGcDEwc5UbVBFjDnejgprL',
-            name: 'Armonyco Pro',
+            name: 'Armonyco Starter',
             credits: 25000,
         },
-        SCALE: {
+        PRO: {
             id: 'prod_TouQwxK1BCwG16',
             priceId: 'price_1SrGcEEwc5UbVBFjMKzJV4pz',
-            name: 'Armonyco Scale',
+            name: 'Armonyco Pro',
             credits: 100000,
         },
-        ENTERPRISE: {
+        ELITE: {
             id: 'prod_TouQJBPUqphhD9',
             priceId: 'price_1SrGcEEwc5UbVBFjSqhLsjhS',
-            name: 'Armonyco Enterprise',
+            name: 'Armonyco Elite',
             credits: 250000,
         },
         TOP_UP: {

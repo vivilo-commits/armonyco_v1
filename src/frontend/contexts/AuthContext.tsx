@@ -184,7 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const organizationId = membership?.organization_id || null;
 
     // Derived blocking states
-    const isAppBlocked = !!user && !!entitlements && !entitlements.subscription_active;
+    // Block if: user is logged in AND (no entitlements OR subscription is not active)
+    const isAppBlocked = !!user && (!entitlements || !entitlements.subscription_active);
     const isCreditsBlocked = !!user && !!entitlements && entitlements.subscription_active && entitlements.credits_balance <= 0;
 
     return (

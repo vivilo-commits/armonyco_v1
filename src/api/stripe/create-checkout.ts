@@ -54,33 +54,109 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const finalSuccessUrl = successUrl || `${requestOrigin}/app/settings?tab=subscription&payment=success&session_id={CHECKOUT_SESSION_ID}`;
         const finalCancelUrl = cancelUrl || `${requestOrigin}/app/settings?tab=subscription&payment=canceled`;
 
-        // If organizationId is missing but userId is present, try to fetch it (Sign-up flow)
+        // If organizationId is missing but userId is present, try to fetch it or create it (Sign-up flow)
         if (!organizationId && userId) {
             console.log(`[API] 🔍 Missing organizationId for user ${userId}, attempting lookup...`);
 
-            // Retry logic (3 attempts)
-            for (let i = 0; i < 5; i++) {
-                const { data: memberships, error: lookupError } = await supabaseAdmin
+            // First, try to find existing membership
+            const { data: memberships, error: lookupError } = await supabaseAdmin
+                .from('organization_members')
+                .select('organization_id')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (lookupError) {
+                console.error(`[API] ❌ Lookup error for user ${userId}:`, lookupError);
+            }
+
+            if (memberships && memberships.length > 0) {
+                organizationId = memberships[0].organization_id;
+                console.log(`[API] ✅ Organization found: ${organizationId}`);
+            } else {
+                // No organization exists - create one automatically from user metadata
+                console.log(`[API] 🏗️ No organization found, creating new one for user ${userId}...`);
+
+                // Get user metadata (company_name, etc.) from auth.users
+                const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+                if (authError || !authUser?.user) {
+                    console.error(`[API] ❌ Failed to get user metadata:`, authError);
+                    return res.status(400).json({
+                        error: 'User not found',
+                        message: 'Could not retrieve user information for organization creation.'
+                    });
+                }
+
+                const userMeta = authUser.user.user_metadata || {};
+                const companyName = userMeta.company_name || `${userMeta.first_name || 'User'}'s Organization`;
+
+                // Create organization
+                const { data: newOrg, error: orgError } = await supabaseAdmin
+                    .from('organizations')
+                    .insert({
+                        name: companyName,
+                        owner_id: userId
+                    })
+                    .select('id')
+                    .single();
+
+                if (orgError || !newOrg) {
+                    console.error(`[API] ❌ Failed to create organization:`, orgError);
+                    return res.status(500).json({
+                        error: 'Organization creation failed',
+                        message: 'Could not create organization for new user.'
+                    });
+                }
+
+                organizationId = newOrg.id;
+                console.log(`[API] ✅ Organization created: ${organizationId} (${companyName})`);
+
+                // Create organization membership
+                const { error: memberError } = await supabaseAdmin
                     .from('organization_members')
-                    .select('organization_id')
-                    .eq('user_id', userId)
-                    .order('created_at', { ascending: false })
-                    .limit(1);
+                    .insert({
+                        organization_id: organizationId,
+                        user_id: userId,
+                        role: 'owner'
+                    });
 
-                if (lookupError) {
-                    console.error(`[API] ❌ Lookup error for user ${userId}:`, lookupError);
+                if (memberError) {
+                    console.error(`[API] ⚠️ Failed to create membership:`, memberError);
                 }
 
-                if (memberships && memberships.length > 0) {
-                    organizationId = memberships[0].organization_id;
-                    console.log(`[API] ✅ Organization found: ${organizationId}`);
-                    break;
+                // Create organization entitlements (inactive until payment completes)
+                const { error: entError } = await supabaseAdmin
+                    .from('organization_entitlements')
+                    .insert({
+                        organization_id: organizationId,
+                        subscription_active: false,
+                        credits_balance: 0,
+                        plan_tier: planId || 'starter'
+                    });
+
+                if (entError) {
+                    console.error(`[API] ⚠️ Failed to create entitlements:`, entError);
                 }
 
-                if (i < 4) {
-                    console.log(`[API] ⏳ Org bit busy... retry ${i + 1}/5`);
-                    await new Promise(r => setTimeout(r, 1000));
+                // Create user profile
+                const fullName = [userMeta.first_name, userMeta.last_name].filter(Boolean).join(' ') || email;
+                const { error: profileError } = await supabaseAdmin
+                    .from('profiles')
+                    .upsert({
+                        id: userId,
+                        email: authUser.user.email || email,
+                        full_name: fullName,
+                        phone: userMeta.phone || null,
+                        language: 'en',
+                        ai_tone: 'professional'
+                    }, { onConflict: 'id' });
+
+                if (profileError) {
+                    console.error(`[API] ⚠️ Failed to create profile:`, profileError);
                 }
+
+                console.log(`[API] ✅ Organization setup complete for ${companyName}`);
             }
         }
 

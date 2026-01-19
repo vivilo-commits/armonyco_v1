@@ -42,8 +42,8 @@ export const SubscriptionGate: React.FC<SubscriptionGateProps> = ({
   }
 
   // Allow access if subscription is active
-  // Critical: Only block if we HAVE entitlements and they say inactive
-  if (!isAppBlocked || !user) {
+  // Block if: no entitlements OR subscription is not active
+  if (!isAppBlocked) {
     return <>{children}</>;
   }
 
