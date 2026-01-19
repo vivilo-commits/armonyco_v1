@@ -1,4 +1,4 @@
-import type { KPI, Execution, BadgeVariant, Verdict, RiskLevel, Priority } from './types';
+import type { KPI, Execution, BadgeVariant, Verdict, RiskLevel, Priority, CashflowSummary } from './types';
 
 // DATE UTILITIES
 export function formatRelativeTime(dateStr?: string): string {
@@ -20,7 +20,11 @@ export function calculateDuration(startTime: string, endTime: string): string {
 }
 
 // KPI CALCULATION
-export function calculateDashboardKPIs(executions: Execution[], messagesCount: number = 0): KPI[] {
+export function calculateDashboardKPIs(
+    executions: Execution[],
+    messagesCount: number = 0,
+    cashflow?: CashflowSummary | null
+): KPI[] {
     const totalCount = executions.length;
     const successCount = executions.filter((e) => e.status === 'success' || e.finished).length;
     const failedCount = executions.filter((e) => e.status === 'failed' || e.status === 'error').length;
@@ -28,14 +32,16 @@ export function calculateDashboardKPIs(executions: Execution[], messagesCount: n
     const successRate = totalCount > 0 ? Math.round((successCount / totalCount) * 100) : 100;
     const failureRate = totalCount > 0 ? ((failedCount / totalCount) * 100).toFixed(1) : '0.0';
 
-    const totalValue = executions.reduce(
-        (acc, curr) => acc + (Number(curr.total_charge) || 0) + (Number(curr.value_captured) || 0),
-        0
-    );
+    // Governed Value comes from cashflow_summary if available
+    const totalValue = cashflow
+        ? Number(cashflow.total_revenue)
+        : executions.reduce((acc, curr) => acc + (Number(curr.total_charge) || 0) + (Number(curr.value_captured) || 0), 0);
 
-    const openEscalations = executions.filter(
-        (e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved'
-    ).length;
+    const openEscalations = cashflow
+        ? (cashflow.escalations_avoided ? 0 : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length)
+        : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length;
+
+    // We can use escalations_avoided as a positive metric too, but the KPI is for "Open"
 
 
 
@@ -62,11 +68,11 @@ export function calculateDashboardKPIs(executions: Execution[], messagesCount: n
     return [
         {
             id: 'total-value',
-            label: 'Total Value',
-            value: totalValue > 0 ? `€ ${totalValue >= 1000 ? (totalValue / 1000).toFixed(1) + 'k' : totalValue.toFixed(2)}` : '€ 0,00',
+            label: 'Governed Value',
+            value: totalValue > 0 ? `€ ${totalValue >= 1000 ? (totalValue / 1000).toFixed(1) + 'k' : totalValue.toFixed(2).replace('.', ',')}` : '€ 0,00',
             trend: 0,
             trendLabel: 'Real-time',
-            subtext: 'Cumulative value',
+            subtext: 'Institutional ROI',
             status: 'success',
         },
         {

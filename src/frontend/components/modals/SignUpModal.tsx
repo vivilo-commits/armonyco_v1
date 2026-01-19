@@ -17,16 +17,16 @@ import { FormField } from '../design-system/FormField';
 import { PLANS_DATA } from '@/frontend/constants';
 import { supabase } from '@/database/supabase';
 import { ASSETS } from '@/frontend/assets';
+import { stripeApi } from '@/backend/stripe-api';
 
 interface SignUpModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
 }
 
 type Step = 'COMPANY' | 'USER' | 'PLAN' | 'PAYMENT';
 
-export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => {
   const [step, setStep] = useState<Step>('COMPANY');
   const [loading, setLoading] = useState(false);
 
@@ -73,7 +73,8 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose, onSuc
     setLoading(true);
     setError(null);
     try {
-      const { error: signUpError } = await supabase.auth.signUp({
+      // Step 1: Create user account
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
@@ -95,24 +96,50 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose, onSuc
       });
 
       if (signUpError) throw signUpError;
+      if (!signUpData.user) throw new Error('User creation failed');
 
-      // TODO: Implementar api.triggerWorkflow
-      // Trigger n8n Activation Webhook if available
-      // if (process.env.VITE_N8N_ACTIVATION_WEBHOOK) {
-      //   await api.triggerWorkflow(process.env.VITE_N8N_ACTIVATION_WEBHOOK, {
-      //     email: formData.email,
-      //     companyName: formData.companyName,
-      //     plan: selectedPlan,
-      //     action: 'NEW_SIGNUP',
-      //   });
-      // }
+      // Step 2: Retrieve organization_id created by handle_new_user trigger
+      // Wait a moment for the trigger to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      onSuccess();
+      const { data: orgMember, error: orgError } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', signUpData.user.id)
+        .single();
+
+      if (orgError || !orgMember) {
+        throw new Error('Failed to retrieve organization assignment');
+      }
+
+      // Step 3: Get selected plan details
+      const selectedPlanData = PLANS_DATA.find(p => p.id === selectedPlan);
+      if (!selectedPlanData || !selectedPlanData.stripePriceId) {
+        throw new Error('Invalid plan selected');
+      }
+
+      // Step 4: Create Stripe Checkout Session
+      const checkoutSession = await stripeApi.createCheckoutSession({
+        priceId: selectedPlanData.stripePriceId,
+        organizationId: orgMember.organization_id,
+        email: formData.email,
+        planId: selectedPlan,
+        planName: selectedPlanData.name,
+        mode: 'subscription',
+        credits: selectedPlanData.includedCredits
+      });
+
+      // Step 5: Redirect to Stripe Checkout
+      if (checkoutSession.url) {
+        window.location.href = checkoutSession.url;
+      } else {
+        throw new Error('Failed to create checkout session');
+      }
+
     } catch (err: unknown) {
       const authError = err as { message: string };
       setError(authError.message || 'Registration failed');
       console.error('Signup error:', err);
-    } finally {
       setLoading(false);
     }
   };
@@ -123,10 +150,10 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose, onSuc
         <React.Fragment key={s}>
           <div
             className={`w-2 h-2 rounded-full transition-all duration-300 ${step === s
-                ? 'gold-gradient shadow-gold-glow w-6'
-                : ['COMPANY', 'USER', 'PLAN', 'PAYMENT'].indexOf(step) > idx
-                  ? 'bg-stone-900'
-                  : 'bg-stone-200'
+              ? 'gold-gradient shadow-gold-glow w-6'
+              : ['COMPANY', 'USER', 'PLAN', 'PAYMENT'].indexOf(step) > idx
+                ? 'bg-stone-900'
+                : 'bg-stone-200'
               }`}
           />
         </React.Fragment>
@@ -414,8 +441,8 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose, onSuc
                     key={plan.id}
                     onClick={() => setSelectedPlan(plan.id)}
                     className={`p-5 rounded-2xl border text-left transition-all ${selectedPlan === plan.id
-                        ? 'border-gold-start gold-gradient text-stone-900 shadow-xl scale-[1.02]'
-                        : 'border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300'
+                      ? 'border-gold-start gold-gradient text-stone-900 shadow-xl scale-[1.02]'
+                      : 'border-stone-200 bg-stone-50 text-stone-600 hover:border-stone-300'
                       }`}
                   >
                     <div className="mb-4">
@@ -489,11 +516,13 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose, onSuc
                   </div>
                 </div>
 
-                <div className="space-y-4 py-8 border-y border-white/5 my-6 flex flex-col items-center justify-center italic text-stone-500 text-sm">
-                  <CreditCard size={48} className="opacity-20 mb-2" />[ Stripe Checkout Embed
-                  Placeholder ]
-                  <p className="text-[10px] uppercase tracking-widest not-italic opacity-50 font-bold">
-                    Checkout initialized for {formData.companyName}
+                <div className="space-y-4 py-8 border-y border-white/5 my-6 flex flex-col items-center justify-center text-stone-400 text-sm">
+                  <CreditCard size={48} className="opacity-20 mb-2" />
+                  <p className="text-xs font-medium">
+                    Secure checkout powered by Stripe
+                  </p>
+                  <p className="text-[10px] uppercase tracking-widest opacity-50 font-bold">
+                    {formData.companyName}
                   </p>
                 </div>
 

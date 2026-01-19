@@ -55,13 +55,7 @@ export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
       loading={loading}
       error={error}
       onRetry={retry}
-      actions={
-        <div className="flex gap-4">
-          <AppButton variant="primary" icon={<Shield size={16} />}>
-            Governance Audit
-          </AppButton>
-        </div>
-      }
+      actions={null}
     >
       <div className="space-y-6">
         {/* SEGMENT CONTROL */}

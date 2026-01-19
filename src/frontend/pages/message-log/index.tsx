@@ -408,7 +408,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
           </div>
 
           {/* SIMPLIFIED STATUS BAR */}
-          <div className="absolute bottom-6 left-6 right-6 py-4 px-8 bg-stone-900/95 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl flex items-center justify-between z-10">
+          <div className="absolute bottom-6 left-6 right-6 py-4 px-8 bg-stone-900/95 backdrop-blur-xl rounded-2xl border border-stone-800 shadow-2xl flex items-center justify-between z-10">
             <div className="flex items-center gap-4">
               <div className="w-2 h-2 rounded-full gold-gradient animate-pulse shadow-gold-glow" />
               <div className="text-[11px] font-black text-white uppercase tracking-[0.2em]">

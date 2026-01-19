@@ -8,9 +8,12 @@ import type {
   ControlAddon,
   AppStatus,
   Verdict,
-  RiskLevel
+  RiskLevel,
+  CashflowSummary,
+  KPI
 } from './types';
 import { calculateDashboardKPIs, calculateGrowthKPIs } from './utils';
+import { supabase } from '@/database/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -28,72 +31,91 @@ class ApiService {
   }
 
   /**
-   * Direct fetch with timeout and error handling
-   * Using native fetch to bypass Supabase JS client timeout issues
+   * Fetch using Supabase JS client (proven working pattern from docs/api/hotels.ts)
+   * Handles authentication and RLS automatically
    */
-  private async directFetch<T>(
+  async supabaseFetch<T>(
     table: string,
-    params: Record<string, string> = {}
+    options: {
+      select?: string;
+      eq?: Record<string, any>;
+      order?: { column: string; ascending?: boolean };
+      limit?: number;
+    } = {}
   ): Promise<T | null> {
-    const defaultParams = {
-      select: '*',
-    };
-
-    const finalParams: Record<string, string> = { ...defaultParams, ...params };
-
-    // Add organization_id filter if present and not explicitly fetching all
-    if (this.organizationId && !params.organization_id) {
-      finalParams['organization_id'] = `eq.${this.organizationId}`;
-    }
-
-    const queryString = new URLSearchParams(finalParams).toString();
-    const url = `${SUPABASE_URL}/rest/v1/${table}?${queryString}`;
-
     try {
-      console.log(`[API] 🔄 Fetching ${table}...`);
+      console.log(`[API] 🔄 Fetching ${table} (Supabase client)...`);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      let query = supabase.from(table).select(options.select || '*');
 
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Content-Type': 'application/json',
-          'Prefer': 'return=representation'
-        },
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
+      // CRITICAL: Strict Multi-Tenancy Enforcement
+      // Inject organization_id if it exists in the table and service, and not already filtered
+      if (this.organizationId && !options.eq?.organization_id) {
+        // We assume all relevant tables have organization_id
+        // Tables like 'profiles' might not, so we handle them or let RLS handle it
+        const tenantTables = [
+          'executions', 'vivilo_whatsapp_history', 'cashflow_summary',
+          'escalations', 'engines', 'addons', 'settings',
+          'organization_hotels', 'organization_pms_config',
+          'organization_entitlements', 'credits_transactions'
+        ];
 
-      if (!response.ok) {
-        console.error(`[API] ❌ HTTP ${response.status} for ${table}`);
+        if (tenantTables.includes(table)) {
+          query = query.eq('organization_id', this.organizationId);
+        }
+      }
+
+      // Apply other filters
+      if (options.eq) {
+        Object.entries(options.eq).forEach(([key, value]) => {
+          query = query.eq(key, value);
+        });
+      }
+
+      if (options.order) {
+        query = query.order(options.order.column, {
+          ascending: options.order.ascending !== false
+        });
+      }
+
+      if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error(`[API] ❌ Supabase error for ${table}:`, error);
         return null;
       }
 
-      const data = await response.json();
       console.log(`[API] ✅ ${table}: ${Array.isArray(data) ? data.length : 1} rows`);
       return data as T;
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.error(`[API] ⏱️ Timeout fetching ${table}`);
-      } else {
-        console.error(`[API] ❌ Error fetching ${table}:`, error);
-      }
+      console.error(`[API] ❌ Exception fetching ${table}:`, error);
       return null;
     }
   }
 
+
   // --- Dashboard Data ---
 
   async getDashboardData() {
-    const [executions, history] = await Promise.all([
-      this.directFetch<Execution[]>('executions', { order: 'started_at.desc', limit: '50' }),
-      this.directFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', { limit: '100' }),
+    const [executions, history, cashflow] = await Promise.all([
+      this.supabaseFetch<Execution[]>('executions', {
+        order: { column: 'started_at', ascending: false },
+        limit: 50
+      }),
+      this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+        order: { column: 'id', ascending: false },
+        limit: 100
+      }),
+      this.supabaseFetch<CashflowSummary[]>('cashflow_summary', { limit: 1 }),
     ]);
 
     const safeExecutions = executions || [];
     const safeHistory = history || [];
+    const safeCashflow = cashflow?.[0] || null;
 
     // Map Execution to ExecutionEvent for the dashboard table
     const events: ExecutionEvent[] = safeExecutions.map(exec => {
@@ -118,21 +140,34 @@ class ApiService {
     });
 
     // Use original calculation logic for 12 KPIs
-    const kpis = calculateDashboardKPIs(safeExecutions, safeHistory.length);
+    const kpis = calculateDashboardKPIs(safeExecutions, safeHistory.length, safeCashflow);
 
     return {
       kpis,
       events, // Dashboard expects 'events' as ExecutionEvent[]
       whatsappHistory: safeHistory,
+      cashflow: safeCashflow
     };
   }
 
   // --- Growth Data ---
 
   async getGrowthData() {
-    const executions = await this.directFetch<Execution[]>('executions', { limit: '1000' });
+    const [executions, cashflow] = await Promise.all([
+      this.supabaseFetch<Execution[]>('executions', { limit: 1000 }),
+      this.supabaseFetch<CashflowSummary[]>('cashflow_summary', {
+        limit: 1,
+        order: { column: 'period_end', ascending: false }
+      })
+    ]);
+
     const safeExecutions = executions || [];
-    const kpis = calculateGrowthKPIs(safeExecutions);
+    const safeCashflow = cashflow?.[0] || null;
+
+    // Use cashflow data if available, otherwise fall back to executions
+    const kpis = safeCashflow
+      ? this.calculateGrowthKPIsFromCashflow(safeCashflow)
+      : calculateGrowthKPIs(safeExecutions);
 
     return {
       kpis,
@@ -152,9 +187,9 @@ class ApiService {
 
   async getControlsData() {
     const [engines, addons, settings] = await Promise.all([
-      this.directFetch<ControlEngine[]>('engines'),
-      this.directFetch<ControlAddon[]>('addons'),
-      this.directFetch<any[]>('settings', { limit: '1' }),
+      this.supabaseFetch<ControlEngine[]>('engines'),
+      this.supabaseFetch<ControlAddon[]>('addons'),
+      this.supabaseFetch<any[]>('settings', { limit: 1 }),
     ]);
 
     const config = settings?.[0] || {};
@@ -170,25 +205,56 @@ class ApiService {
     };
   }
 
+  async updateAddonStatus(id: string, enabled: boolean) {
+    const url = `${SUPABASE_URL}/rest/v1/addons?id=eq.${id}&organization_id=eq.${this.organizationId}`;
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ enabled })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update addon: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async updateIntelligenceMode(mode: string) {
+    // Assuming settings table has organization_id column or we update the single row
+    const url = `${SUPABASE_URL}/rest/v1/settings?organization_id=eq.${this.organizationId}`;
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ intelligence_mode: mode })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update intelligence mode: ${response.status}`);
+    }
+    return response.json();
+  }
+
   // --- Escalations ---
 
   async getEscalationsData(status?: string) {
-    const params: Record<string, string> = {
-      order: 'created_at.desc',
-    };
-
-    if (status) {
-      params['status'] = `eq.${status}`;
-    }
-
-    const data = await this.directFetch<Escalation[]>('escalations', params);
-    return data || [];
+    const escalations = await this.supabaseFetch<Escalation[]>('escalations', {
+      eq: status ? { status } : undefined
+    });
+    return escalations || [];
   }
 
   async getEscalationContext(_phone: string) {
-    const history = await this.directFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
-      order: 'created_at.desc',
-      limit: '20'
+    const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+      order: { column: 'created_at', ascending: false },
+      limit: 20
     });
     return { history: history || [] };
   }
@@ -223,25 +289,36 @@ class ApiService {
   // --- Message Log ---
 
   async getConversationsData() {
-    const history = await this.directFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
-      order: 'created_at.desc',
-      limit: '500'
+    // Use Supabase JS client for reliable data fetching
+    const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+      order: { column: 'id', ascending: true },
+      limit: 500
     });
 
     const safeHistory = history || [];
 
-    // Group by session_id into conversations
-    const conversationsMap = new Map<string, Conversation>();
+    // Filter out tool messages and AI internal traces (Calling Think, Calling Guidelines, etc.)
+    const userMessages = safeHistory.filter(msg => {
+      if (msg.message.type === 'tool') return false;
+      if (msg.message.type === 'ai' && msg.message.content.startsWith('Calling ')) return false;
+      return msg.message.type === 'human' || msg.message.type === 'ai';
+    });
 
-    safeHistory.forEach(msg => {
+    // Group by session_id into conversations
+    const conversationsMap = new Map<string, Conversation & { latestTimestamp: number }>();
+
+    userMessages.forEach(msg => {
       const sessionId = msg.session_id;
+      const msgTimestamp = msg.id; // Using ID as proxy for timestamp (auto-incrementing)
+      const messageTime = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
       if (!conversationsMap.has(sessionId)) {
         conversationsMap.set(sessionId, {
           id: sessionId,
-          name: 'Guest',
-          initials: 'G',
+          name: sessionId, // Use full phone number
+          initials: sessionId.slice(0, 2), // First 2 digits
           platform: 'whatsapp',
-          time: msg.created_at || msg.timestamp || new Date().toISOString(),
+          time: messageTime, // Use first message time
           dates: 'Active',
           status: 'Active',
           messages: [],
@@ -254,29 +331,42 @@ class ApiService {
             checkOutTime: '-',
             fields: [],
             toPay: '€ 0,00'
-          }
+          },
+          latestTimestamp: msgTimestamp
         });
       }
 
       const conv = conversationsMap.get(sessionId)!;
+
+      // Update latest timestamp and conversation time
+      if (msgTimestamp > conv.latestTimestamp) {
+        conv.latestTimestamp = msgTimestamp;
+        conv.time = messageTime; // Update to latest message time
+      }
+
       conv.messages.push({
         id: String(msg.id),
-        sender: msg.direction === 'inbound' ? 'guest' : 'agent',
+        sender: msg.message.type === 'human' ? 'guest' : 'agent',
         type: 'text',
-        text: msg.message?.body || '',
-        time: msg.created_at || msg.timestamp
+        text: msg.message.content || '',
+        time: messageTime // Use actual message timestamp
       });
     });
 
+    // Convert to array and sort by latest message (most recent first)
+    const conversations = Array.from(conversationsMap.values())
+      .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
+      .map(({ latestTimestamp, ...conv }) => conv); // Remove latestTimestamp from final object
+
     return {
-      conversations: Array.from(conversationsMap.values()),
+      conversations,
     };
   }
 
   // --- Settings ---
 
   async getSettingsData() {
-    const settings = await this.directFetch<any[]>('settings', { limit: '1' });
+    const settings = await this.supabaseFetch<any[]>('settings', { limit: 1 });
     return settings?.[0] || {};
   }
 
@@ -290,6 +380,75 @@ class ApiService {
   async syncConversations() {
     console.log('[API] 🔄 Triggering conversation sync...');
     return true;
+  }
+
+  // --- Cashflow / Governed Value ---
+
+  async getCashflowData() {
+    const data = await this.supabaseFetch<CashflowSummary[]>('cashflow_summary', {
+      limit: 1,
+      order: { column: 'period_end', ascending: false }
+    });
+    return data?.[0] || null;
+  }
+
+  private calculateGrowthKPIsFromCashflow(cashflow: CashflowSummary): KPI[] {
+    return [
+      {
+        id: 'total-revenue',
+        label: 'Total Revenue Captured',
+        value: `€ ${Number(cashflow.total_revenue).toFixed(2).replace('.', ',')}`,
+        trend: 0,
+        trendLabel: '',
+        subtext: `${cashflow.executions_count} Executions`,
+        status: Number(cashflow.total_revenue) > 0 ? 'success' : 'neutral',
+      },
+      {
+        id: 'upsell-rate',
+        label: 'Upsell Acceptance Rate',
+        value: `${Number(cashflow.upsell_acceptance_rate).toFixed(1)}%`,
+        trend: 0,
+        trendLabel: '',
+        subtext: `${cashflow.upsell_accepted_count}/${cashflow.upsell_offers_count} Accepted`,
+        status: Number(cashflow.upsell_acceptance_rate) > 0 ? 'success' : 'neutral',
+      },
+      {
+        id: 'orphan-days',
+        label: 'Orphan Days Captured',
+        value: cashflow.orphan_days_captured.toString(),
+        trend: 0,
+        trendLabel: '',
+        subtext: 'Occupancy Boost',
+        status: cashflow.orphan_days_captured > 0 ? 'success' : 'neutral',
+      },
+      {
+        id: 'late-checkout',
+        label: 'Late Checkout Revenue',
+        value: `€ ${Number(cashflow.late_checkout_revenue).toFixed(2).replace('.', ',')}`,
+        trend: 0,
+        trendLabel: '',
+        subtext: 'Extension Value',
+        status: Number(cashflow.late_checkout_revenue) > 0 ? 'success' : 'neutral',
+      },
+      {
+        id: 'early-checkin',
+        label: 'Early Check-in Revenue',
+        value: `€ ${Number(cashflow.early_checkin_revenue).toFixed(2).replace('.', ',')}`,
+        trend: 0,
+        trendLabel: '',
+        subtext: 'Arrival Value',
+        status: Number(cashflow.early_checkin_revenue) > 0 ? 'success' : 'neutral',
+      },
+      {
+        id: 'services',
+        label: 'Services Revenue',
+        value: `€ ${Number(cashflow.services_revenue).toFixed(2).replace('.', ',')}`,
+        trend: 0,
+        trendLabel: '',
+        subtext: 'Add-ons & Extras',
+        status: Number(cashflow.services_revenue) > 0 ? 'success' : 'neutral',
+      },
+    ];
   }
 
   /**

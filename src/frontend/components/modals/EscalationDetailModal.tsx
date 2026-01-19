@@ -145,26 +145,29 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                     No recent history found for this number.
                   </div>
                 ) : (
-                  history.map((h) => (
-                    <div
-                      key={h.id}
-                      className={`flex flex-col ${h.direction === 'inbound' ? 'items-start' : 'items-end'}`}
-                    >
+                  history.map((h) => {
+                    const isInbound = h.message?.type === 'human';
+                    return (
                       <div
-                        className={`
-                          max-w-[85%] p-3 rounded-2xl text-xs
-                          ${h.direction === 'inbound'
-                            ? 'bg-white border border-stone-200 text-stone-800'
-                            : 'bg-stone-900 text-white shadow-md'}
-                        `}
+                        key={h.id}
+                        className={`flex flex-col ${isInbound ? 'items-start' : 'items-end'}`}
                       >
-                        {h.message?.body || h.message?.content || 'Empty message'}
+                        <div
+                          className={`
+                            max-w-[85%] p-3 rounded-2xl text-xs
+                            ${isInbound
+                              ? 'bg-white border border-stone-200 text-stone-800'
+                              : 'bg-stone-900 text-white shadow-md'}
+                          `}
+                        >
+                          {h.message?.content || 'Empty message'}
+                        </div>
+                        <span className="text-[9px] text-stone-400 mt-1 font-mono">
+                          {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
-                      <span className="text-[9px] text-stone-400 mt-1 font-mono">
-                        {new Date(h.timestamp || h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>

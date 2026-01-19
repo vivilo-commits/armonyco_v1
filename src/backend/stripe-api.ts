@@ -39,25 +39,48 @@ export class StripeApiService {
      * @param priceId - The Stripe Price ID
      * @param organizationId - The tenant's organization ID
      */
-    async createCheckoutSession(priceId: string, organizationId: string): Promise<StripeSessionResponse> {
-        // In a real production app, this would call your Node/Edge function backend
-        // Since we are using MCP/Supabase, we would typically trigger this via a Supabase Edge Function
-
+    async createCheckoutSession(params: {
+        priceId: string;
+        organizationId: string;
+        email: string;
+        planId?: string;
+        planName?: string;
+        mode?: 'subscription' | 'payment';
+        amount?: number;
+        credits?: number;
+    }): Promise<StripeSessionResponse> {
         try {
-            // Mocking the redirect for now as we don't have the Edge Function deployed yet
-            // In a real scenario, we'd use:
-            // const { data, error } = await supabase.functions.invoke('create-stripe-session', {
-            //   body: { priceId, organizationId }
-            // });
+            console.log(`[Stripe] Creating session for:`, params);
 
-            console.log(`[Stripe] Creating session for Price: ${priceId}, Org: ${organizationId}`);
+            const response = await fetch('/api/stripe/create-checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
 
-            // For demonstration in sandbox, we return a fallback or instructions
-            // Ideally, the user provides a real endpoint.
-            return { url: `https://billing.armonyco.ai/checkout?price=${priceId}&org=${organizationId}` };
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to create checkout session');
+            }
+
+            return await response.json();
         } catch (error) {
             console.error('[Stripe] Failed to create checkout session:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Verify a payment session
+     */
+    async verifyPayment(sessionId: string): Promise<{ verified: boolean; customerId?: string; subscriptionId?: string }> {
+        try {
+            const response = await fetch(`/api/stripe/verify-payment?sessionId=${sessionId}`);
+            if (!response.ok) throw new Error('Failed to verify payment');
+            return await response.json();
+        } catch (error) {
+            console.error('[Stripe] Verification error:', error);
+            return { verified: false };
         }
     }
 

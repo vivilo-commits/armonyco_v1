@@ -3,11 +3,9 @@ import { Cpu, MessageSquare, Rocket, Sliders, Shield } from 'lucide-react';
 
 import {
   AppPage,
-  AppCard,
   AppSection,
   FormField,
   AppBadge,
-  AppKPICard,
   AppButton,
   AppSwitch,
 } from '@/frontend/components/design-system';
@@ -21,6 +19,7 @@ interface ControlsProps {
 }
 
 export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
+  const [showSaveModal, setShowSaveModal] = React.useState(false);
   const { data, loading, error, retry } = usePageData<{
     toneOfVoice: string;
     languages: string[];
@@ -49,186 +48,251 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
     );
   }, [data?.addons, searchTerm]);
 
-  const stats = [
-    {
-      label: 'Active Engines',
-      value: (data?.engines?.filter((e) => e.status === 'Active').length || 0).toString(),
-      sub: 'Universal',
-    },
-    { label: 'Add-on Adoption', value: '0%', sub: 'No active usage' },
-    { label: 'Memory Depth', value: '0%', sub: 'Context Pending' },
-  ];
+  const stats = React.useMemo(() => {
+    const activeEngines = data?.engines?.filter((e) => e.status === 'Active').length || 0;
+    const totalEngines = data?.engines?.length || 1;
+
+    const enabledAddons = data?.addons?.filter((a) => a.enabled).length || 0;
+    const totalAddons = data?.addons?.length || 1;
+    const addonAdoption = Math.round((enabledAddons / totalAddons) * 100);
+
+    return [
+      {
+        label: 'Active Engines',
+        value: activeEngines.toString(),
+        sub: `${totalEngines} Universal`,
+      },
+      {
+        label: 'Add-on Adoption',
+        value: `${addonAdoption}%`,
+        sub: `${enabledAddons}/${totalAddons} enabled`
+      },
+      {
+        label: 'Memory Depth',
+        value: '15 msgs',
+        sub: 'Context window'
+      },
+    ];
+  }, [data?.engines, data?.addons]);
 
   return (
-    <AppPage
-      title="Controls"
-      subtitle="Institutional orchestration parameters and engine configuration."
-      loading={loading}
-      error={error}
-      onRetry={retry}
-      actions={
-        <AppButton variant="primary" icon={<Shield size={16} />}>
-          Commit Changes
-        </AppButton>
-      }
-    >
-      <div className="space-y-12">
-        {/* TOP STATS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {stats.map((stat, i) => (
-            <AppCard
-              key={i}
-              variant="light"
-              padding="small"
-              className="hover:border-gold-start/30 transition-all"
-            >
-              <AppKPICard
-                variant="light"
-                kpi={{
-                  id: `stat-${i}`,
-                  label: stat.label,
-                  value: stat.value,
-                  subtext: stat.sub,
-                  trend: 0,
-                  trendLabel: '',
-                  status: 'neutral',
-                }}
-              />
-            </AppCard>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
-          {/* LEFT: AMELIA COMMUNICATION */}
-          <div className="lg:col-span-1 space-y-8">
-            <AppSection
-              title="Amelia — Communication"
-              subtitle="Define how the agent represents your institutional voice."
-              icon={<MessageSquare size={18} className="text-stone-400" />}
-            >
-              <div className="space-y-6">
-                <FormField
-                  label="Tone preset"
-                  placeholder="Professional & Warm"
-                  value={data?.toneOfVoice || ''}
-                  onChange={() => {}}
-                />
-                <FormField
-                  label="Languages"
-                  placeholder="English, Italian, Spanish"
-                  value={data?.languages?.join(', ') || ''}
-                  onChange={() => {}}
-                />
-                <FormField
-                  label="Formality level"
-                  placeholder="Medium"
-                  value={data?.formalityLevel || ''}
-                  onChange={() => {}}
-                />
-                <FormField
-                  label="Brand keywords"
-                  placeholder="Premium, Reliable, Direct"
-                  value={data?.brandKeywords || ''}
-                  onChange={() => {}}
-                />
+    <>
+      <AppPage
+        title="Controls"
+        subtitle="Institutional orchestration parameters and engine configuration."
+        loading={loading}
+        error={error}
+        onRetry={retry}
+        actions={
+          <AppButton
+            variant="primary"
+            icon={<Shield size={16} />}
+            onClick={() => setShowSaveModal(true)}
+          >
+            Commit Changes
+          </AppButton>
+        }
+      >
+        <div className="space-y-12">
+          {/* TOP STATS */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {stats.map((stat, i) => (
+              <div
+                key={i}
+                className="bg-white/40 backdrop-blur-xl border border-white/20 rounded-2xl p-6 hover:border-gold-start/40 hover:shadow-premium transition-all duration-300 group"
+              >
+                <div className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-2 group-hover:text-gold-start transition-colors">
+                  {stat.label}
+                </div>
+                <div className="text-3xl font-black text-stone-900 mb-1">
+                  {stat.value}
+                </div>
+                <div className="text-[10px] text-stone-500">
+                  {stat.sub}
+                </div>
               </div>
-            </AppSection>
+            ))}
           </div>
 
-          {/* RIGHT: ENGINES */}
-          <div className="lg:col-span-2 space-y-12">
-            {/* UNIVERSAL ENGINES */}
-            <AppSection
-              title="Universal Engines"
-              subtitle="Core autonomous processes running across all properties."
-              icon={<Cpu size={18} className="text-stone-400" />}
-            >
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredEngines.map((engine: ControlEngine) => (
-                  <AppCard
-                    key={engine.id}
-                    variant="light"
-                    padding="none"
-                    className="border border-stone-100 overflow-hidden"
-                  >
-                    <div className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="font-bold text-sm text-stone-900">{engine.name}</div>
-                        <AppSwitch checked={engine.status === 'Active'} onChange={() => {}} />
-                      </div>
-                      <p className="text-[10px] text-stone-500 leading-relaxed min-h-[30px]">
-                        {engine.summary}
-                      </p>
-                    </div>
-                    <div className="px-6 py-4 bg-stone-50 border-t border-stone-100">
-                      <AppBadge variant={engine.status === 'Active' ? 'success' : 'neutral'}>
-                        {engine.status}
-                      </AppBadge>
-                    </div>
-                  </AppCard>
-                ))}
-              </div>
-            </AppSection>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            {/* LEFT: AMELIA COMMUNICATION */}
+            <div className="lg:col-span-1 space-y-8">
+              <AppSection
+                title="Amelia — Communication"
+                subtitle="Define how the agent represents your institutional voice."
+                icon={<MessageSquare size={18} className="text-stone-400" />}
+              >
+                <div className="space-y-6">
+                  <FormField
+                    label="Tone preset"
+                    placeholder="Professional & Warm"
+                    value={data?.toneOfVoice || ''}
+                    onChange={() => { }}
+                  />
+                  <FormField
+                    label="Languages"
+                    placeholder="English, Italian, Spanish"
+                    value={data?.languages?.join(', ') || ''}
+                    onChange={() => { }}
+                  />
+                  <FormField
+                    label="Formality level"
+                    placeholder="Medium"
+                    value={data?.formalityLevel || ''}
+                    onChange={() => { }}
+                  />
+                  <FormField
+                    label="Brand keywords"
+                    placeholder="Premium, Reliable, Direct"
+                    value={data?.brandKeywords || ''}
+                    onChange={() => { }}
+                  />
+                </div>
+              </AppSection>
 
-            {/* ADD-ON CATALOG */}
-            <AppSection
-              title="Add-on Catalog"
-              subtitle="Managed services and upsells available for guest request."
-              icon={<Rocket size={18} className="text-stone-400" />}
-              action={
-                <AppButton variant="outline" size="sm">
-                  Add an add-on
-                </AppButton>
-              }
-            >
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {filteredAddons.map((addon: ControlAddon) => (
-                  <AppCard
-                    key={addon.id}
-                    variant="light"
-                    padding="small"
-                    className="flex flex-col justify-between hover:border-gold-start/30 transition-all h-full"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="text-xs font-bold text-stone-900">{addon.name}</div>
-                        <div className="text-[10px] font-mono text-gold-gradient font-bold">
-                          {addon.price}
-                        </div>
-                      </div>
-                      <p className="text-[10px] text-stone-500 leading-relaxed mb-4">
-                        {addon.summary}
-                      </p>
-                    </div>
-                  </AppCard>
-                ))}
-              </div>
-            </AppSection>
-
-            {/* INTELLIGENCE LEVEL */}
-            <AppSection
-              title="Intelligence Level"
-              subtitle="Define the cognitive depth for autonomous decision making."
-              icon={<Sliders size={18} className="text-stone-400" />}
-            >
-              <div className="flex items-center gap-2 bg-stone-100 p-1.5 rounded-2xl w-fit">
-                {['Standard', 'Advanced', 'Pro', 'Elite', 'Max'].map((level) => (
-                  <button
-                    key={level}
-                    className={`
-                      px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all
+              {/* INTELLIGENCE LEVEL */}
+              <AppSection
+                title="Intelligence Level"
+                subtitle="Define the cognitive depth for autonomous decision making."
+                icon={<Sliders size={18} className="text-stone-400" />}
+              >
+                <div className="flex flex-wrap items-center gap-2 bg-stone-100 p-1.5 rounded-2xl">
+                  {['Standard', 'Advanced', 'Pro', 'Elite', 'Max'].map((level) => (
+                    <button
+                      key={level}
+                      onClick={async () => {
+                        if (data?.intelligenceMode === level) return;
+                        try {
+                          await api.updateIntelligenceMode(level);
+                          retry();
+                        } catch (e) {
+                          console.error('Failed to update intelligence mode:', e);
+                        }
+                      }}
+                      className={`
+                      px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all
                       ${level === (data?.intelligenceMode || 'Pro') ? 'bg-stone-900 text-white shadow-premium' : 'text-stone-400 hover:text-stone-600'}
                     `}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </AppSection>
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </AppSection>
+            </div>
+
+            {/* RIGHT: ENGINES */}
+            <div className="lg:col-span-2 space-y-12">
+              {/* UNIVERSAL ENGINES */}
+              <AppSection
+                title="Universal Engines"
+                subtitle="Core autonomous processes running across all properties."
+                icon={<Cpu size={18} className="text-stone-400" />}
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredEngines.map((engine: ControlEngine) => (
+                    <div
+                      key={engine.id}
+                      className="bg-white/60 backdrop-blur-md border border-white/30 rounded-2xl overflow-hidden hover:border-gold-start/30 hover:shadow-premium transition-all duration-300 group"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="font-bold text-sm text-stone-900 group-hover:text-gold-start transition-colors">{engine.name}</div>
+                          <AppSwitch checked={engine.status === 'Active'} onChange={() => { }} />
+                        </div>
+                        <p className="text-[10px] text-stone-500 leading-relaxed min-h-[30px]">
+                          {engine.summary}
+                        </p>
+                      </div>
+                      <div className="px-6 py-4 bg-white/40 border-t border-white/20">
+                        <AppBadge variant={engine.status === 'Active' ? 'success' : 'neutral'}>
+                          {engine.status}
+                        </AppBadge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AppSection>
+
+              {/* ADD-ON CATALOG */}
+              <AppSection
+                title="Add-on Catalog"
+                subtitle="Managed services and upsells available for guest request."
+                icon={<Rocket size={18} className="text-stone-400" />}
+                action={
+                  <AppButton variant="outline" size="sm">
+                    Add an add-on
+                  </AppButton>
+                }
+              >
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {filteredAddons.map((addon: ControlAddon) => (
+                    <div
+                      key={addon.id}
+                      className="bg-white/50 backdrop-blur-lg border border-white/25 rounded-2xl p-5 hover:border-gold-start/40 hover:shadow-premium transition-all duration-300 group flex flex-col justify-between h-full cursor-pointer"
+                      onClick={async () => {
+                        try {
+                          await api.updateAddonStatus(addon.id, !addon.enabled);
+                          retry();
+                        } catch (e) {
+                          console.error('Failed to update addon status:', e);
+                        }
+                      }}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-bold text-stone-900 group-hover:text-gold-start transition-colors">{addon.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2 h-2 rounded-full ${addon.enabled ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-stone-300'}`} />
+                            <div className="text-[10px] font-mono gold-gradient font-bold">
+                              {addon.price}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-stone-500 leading-relaxed mb-4">
+                          {addon.summary}
+                        </p>
+                        <div className="flex justify-end">
+                          <AppBadge variant={addon.enabled ? 'success' : 'neutral'} size="sm">
+                            {addon.enabled ? 'Active' : 'Enable'}
+                          </AppBadge>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AppSection>
+            </div>
           </div>
         </div>
-      </div>
-    </AppPage>
+      </AppPage>
+
+      {/* COMMIT CHANGES MODAL */}
+      {
+        showSaveModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowSaveModal(false)}>
+            <div className="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                  <Shield className="text-green-600" size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-stone-900">Changes Saved</h3>
+                <p className="text-sm text-stone-600">
+                  Your institutional control parameters have been successfully committed.
+                </p>
+                <AppButton
+                  variant="primary"
+                  className="w-full"
+                  onClick={() => setShowSaveModal(false)}
+                >
+                  Continue
+                </AppButton>
+              </div>
+            </div>
+          </div>
+        )
+      }
+    </>
   );
 };
 

@@ -100,16 +100,16 @@ export interface Escalation {
 export interface WhatsAppHistory {
   id: number;
   session_id: string;
-  direction: 'inbound' | 'outbound';
   message: {
-    body: string;
-    type: string;
-    timestamp: string;
-    [key: string]: any;
+    type: 'human' | 'ai' | 'tool';
+    content: string;
+    additional_kwargs?: Record<string, unknown>;
+    response_metadata?: Record<string, unknown>;
+    tool_calls?: unknown[];
+    [key: string]: unknown;
   };
-  metadata: Record<string, any>;
+  organization_id: string | null;
   created_at: string;
-  timestamp: string;
 }
 
 export interface KPIData {
@@ -507,6 +507,7 @@ export interface ControlAddon {
   status: 'Active' | 'Inactive';
   summary: string;
   price: string;
+  enabled: boolean;
 }
 /**
  * AUTH TYPES
@@ -578,6 +579,9 @@ export interface OrganizationEntitlements {
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   current_period_end?: string | null;
+  auto_topup_enabled?: boolean;
+  auto_topup_threshold?: number;
+  auto_topup_amount?: number;
   updated_at?: string;
 }
 
@@ -688,3 +692,25 @@ export interface SupabaseQueryResult<T> {
 }
 
 export type SupabaseQuery<T> = Promise<SupabaseQueryResult<T>>;
+export interface CashflowSummary {
+  id: string;
+  organization_id: string;
+  period_start: string;
+  period_end: string;
+  total_revenue: number;
+  upsell_revenue: number;
+  late_checkout_revenue: number;
+  early_checkin_revenue: number;
+  services_revenue: number;
+  orphan_days_revenue: number;
+  upsell_offers_count: number;
+  upsell_accepted_count: number;
+  upsell_acceptance_rate: number;
+  orphan_days_captured: number;
+  hours_saved: number;
+  escalations_avoided: number;
+  currency: string;
+  executions_count: number;
+  created_at: string;
+  updated_at: string;
+}

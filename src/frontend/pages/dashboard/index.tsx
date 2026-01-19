@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity } from 'lucide-react';
+import { Activity, Shield } from 'lucide-react';
 
 import {
   AppPage,
@@ -56,6 +56,14 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
       }}
       actions={
         <div className="flex gap-2">
+          <AppButton
+            variant="secondary"
+            size="sm"
+            icon={<Shield size={14} />}
+            onClick={() => alert('Initiating Governance Audit Protocol...')}
+          >
+            Governance Audit
+          </AppButton>
           <AppBadge
             variant="success"
             icon={<div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}

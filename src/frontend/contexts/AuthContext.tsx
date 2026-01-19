@@ -37,6 +37,9 @@ interface Entitlements {
     subscription_status: string | null;
     credits_balance: number;
     plan_tier: string | null;
+    auto_topup_enabled?: boolean;
+    auto_topup_threshold?: number;
+    auto_topup_amount?: number;
 }
 
 interface AuthContextType {
@@ -146,6 +149,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         subscription_status: entData.subscription_status || null,
                         credits_balance: entData.credits_balance || 0,
                         plan_tier: entData.plan_tier || null,
+                        auto_topup_enabled: !!entData.auto_topup_enabled,
+                        auto_topup_threshold: entData.auto_topup_threshold || 10000,
+                        auto_topup_amount: entData.auto_topup_amount || 10000,
                     });
                 }
             }
@@ -164,6 +170,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMembership(null);
         setEntitlements(null);
         api.setOrganizationId(null);
+        // Force redirect to landing page
+        window.location.href = '/';
     }
 
     async function refreshProfile() {

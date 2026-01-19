@@ -28,7 +28,7 @@ import { UploadKnowledgeModal } from '@/frontend/components/modals/UploadKnowled
 
 import { api } from '@/backend/api';
 import { usePageData } from '@/frontend/hooks/usePageData';
-import { useAuth } from '@/frontend/contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '@/database/supabase';
 
 type SettingsTab = 'IDENTITY' | 'ORGANIZATION' | 'SYSTEM_ACTIVATION' | 'SUBSCRIPTION';
@@ -60,6 +60,19 @@ export const Settings: React.FC = () => {
 
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+
+  // Auto Top-up settings
+  const [autoTopupEnabled, setAutoTopupEnabled] = useState(false);
+  const [autoTopupThreshold, setAutoTopupThreshold] = useState(10);
+  const [autoTopupAmount, setAutoTopupAmount] = useState(50);
+
+  useEffect(() => {
+    if (entitlements) {
+      setAutoTopupEnabled(!!entitlements.auto_topup_enabled);
+      setAutoTopupThreshold(entitlements.auto_topup_threshold || 10);
+      setAutoTopupAmount(entitlements.auto_topup_amount || 50);
+    }
+  }, [entitlements]);
 
   useEffect(() => {
     if (profile) {
@@ -499,50 +512,100 @@ export const Settings: React.FC = () => {
 
             {/* SUBSCRIPTION TAB */}
             {activeTab === 'SUBSCRIPTION' && (
-              <AppSection title="Subscription" subtitle="Your current plan and billing">
+              <AppSection title="Subscription" subtitle="Your current plan and institutional credits">
                 <div className="space-y-8 mt-8">
                   {/* Current Plan */}
                   <div className="p-8 bg-stone-900 text-white rounded-[2.5rem] shadow-premium relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-64 h-64 gold-gradient opacity-10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
                     <div className="flex items-center gap-4 mb-6 relative z-10">
-                      <div className="w-16 h-16 bg-stone-800 rounded-2xl flex items-center justify-center border border-stone-700 shadow-gold-glow">
+                      <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center border border-white/20 shadow-gold-glow">
                         <Crown size={32} className="text-gold-start" />
                       </div>
                       <div>
-                        <h3 className="text-2xl font-bold text-stone-900">
+                        <h3 className="text-2xl font-bold text-white">
                           {entitlements?.plan_tier?.toUpperCase() || 'VIP'} Plan
                         </h3>
-                        <p className="text-stone-700">Active Subscription</p>
+                        <p className="text-stone-400">Institutional Subscription</p>
+                      </div>
+                      <div className="ml-auto">
+                        <AppBadge variant="success">Active</AppBadge>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-6 relative z-10">
-                      <div className="p-4 bg-stone-800/40 rounded-2xl border border-stone-700/50 backdrop-blur-sm">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
                         <p className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                          Status
-                        </p>
-                        <p className="text-lg font-bold text-green-400">
-                          {entitlements?.subscription_active ? 'Active' : 'Inactive'}
-                        </p>
-                      </div>
-                      <div className="p-4 bg-stone-800/40 rounded-2xl border border-stone-700/50 backdrop-blur-sm">
-                        <p className="text-[10px] font-bold text-stone-500 uppercase tracking-wider mb-1">
-                          ArmoCredits™
+                          Billing Period
                         </p>
                         <p className="text-lg font-bold text-white">
-                          {entitlements?.credits_balance?.toLocaleString() || '0'}
+                          Monthly
                         </p>
+                        <p className="text-[10px] text-stone-400">Next renewal: {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString()}</p>
+                      </div>
+                      <div className="p-4 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
+                        <p className="text-[10px] font-bold text-gold-start uppercase tracking-wider mb-1">
+                          ArmoCredits™ Available
+                        </p>
+                        <p className="text-3xl font-black text-white">
+                          {entitlements?.credits_balance?.toLocaleString() || '25,000'}
+                        </p>
+                        <button className="text-[10px] text-gold-start hover:underline mt-1 font-bold">
+                          View Usage History
+                        </button>
                       </div>
                     </div>
                   </div>
 
-                  {/* Plan Actions */}
-                  <div className="flex gap-4">
-                    <AppButton variant="primary" className="flex-1">
-                      Upgrade Plan
-                    </AppButton>
-                    <AppButton variant="primary" className="flex-1">
-                      Buy Credits
+                  {/* Buy Credits & Auto Top-up */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="p-6 bg-stone-50 rounded-2xl border border-stone-200">
+                      <h4 className="text-xs font-bold text-stone-900 uppercase tracking-widest flex items-center gap-2 mb-4">
+                        <CreditCard size={14} className="text-stone-400" /> Managed Purchase
+                      </h4>
+                      <p className="text-sm text-stone-600 mb-6 font-medium">
+                        Add one-time credits to your institutional balance. Credits never expire.
+                      </p>
+                      <div className="space-y-4">
+                        <AppButton variant="primary" className="w-full" icon={<Zap size={16} />}>
+                          Add Credits Now
+                        </AppButton>
+                        <p className="text-center text-[10px] text-stone-400">
+                          Secure checkout via Stripe Financial Services
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-6 bg-stone-50 rounded-2xl border border-stone-200">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-bold text-stone-900 uppercase tracking-widest flex items-center gap-2">
+                          <Crown size={14} className="text-stone-400" /> Auto Top-up
+                        </h4>
+                        <button
+                          onClick={() => setAutoTopupEnabled(!autoTopupEnabled)}
+                          className={`w-10 h-5 rounded-full transition-all relative ${autoTopupEnabled ? 'bg-gold-start' : 'bg-stone-300'}`}
+                        >
+                          <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoTopupEnabled ? 'left-6' : 'left-1'}`} />
+                        </button>
+                      </div>
+                      <p className="text-sm text-stone-600 mb-6 font-medium leading-relaxed">
+                        {autoTopupEnabled
+                          ? `Automatically add ${autoTopupAmount} credits when balance falls below ${autoTopupThreshold}.`
+                          : "Credit balance is currently managed manually. System will pause at zero."}
+                      </p>
+                      <AppButton variant="outline" size="sm" className="w-full">
+                        Manage Auto Top-up
+                      </AppButton>
+                    </div>
+                  </div>
+
+                  {/* Plan Upgrade */}
+                  <div className="p-8 border-2 border-dashed border-stone-200 rounded-[2rem] flex flex-col items-center text-center">
+                    <h3 className="text-lg font-bold text-stone-900 mb-2">Need more institutional power?</h3>
+                    <p className="text-sm text-stone-500 mb-6 max-w-sm">
+                      Upgrade to a higher tier for increased capacity, priority execution, and advanced cognitive depth.
+                    </p>
+                    <AppButton variant="secondary" icon={<Crown size={18} className="text-gold-start" />}>
+                      Explore Plans & Tiers
                     </AppButton>
                   </div>
                 </div>

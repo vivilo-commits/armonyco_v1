@@ -63,7 +63,11 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
       onRetry={retry}
       actions={
         <div className="flex gap-4">
-          <AppButton variant="primary" icon={<Target size={16} />}>
+          <AppButton
+            variant="primary"
+            icon={<Target size={16} />}
+            onClick={() => alert('Starting Goal Capture analysis...')}
+          >
             Capture Goal
           </AppButton>
         </div>
@@ -121,11 +125,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {[
               { label: 'Hours Saved', value: '0h', sub: 'Operational Time' },
-              { label: 'Human Escalations Avoided', value: '0', sub: 'Autonomous Resolutions' },
-              { label: 'Median Resolution Time', value: '--', sub: 'Speed Improvement' },
-              { label: 'Verified Closure Rate', value: '0.0%', sub: 'Completion Integrity' },
-              { label: 'Repeat Issue Reduction', value: '--', sub: 'Learning Effect' },
-              { label: 'Net Operational Uplift', value: '--', sub: 'Efficiency Gain' },
+              { label: 'Human Escalations Avoided', value: '0', sub: 'Avoided Events', status: 'success' },
             ].map((item, i) => (
               <AppKPICard
                 key={i}
@@ -135,9 +135,9 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
                   label: item.label,
                   value: item.value,
                   subtext: item.sub,
-                  trend: 0,
-                  trendLabel: '',
-                  status: 'neutral',
+                  trend: 5.2,
+                  trendLabel: '+12%',
+                  status: (item.status as any) || 'neutral',
                 }}
               />
             ))}
