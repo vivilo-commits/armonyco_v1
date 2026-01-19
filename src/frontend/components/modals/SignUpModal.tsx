@@ -102,33 +102,22 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
       // Wait a moment for the trigger to complete
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      const { data: membership, error: orgError } = await supabase
-        .from('organization_members')
-        .select('organization_id')
-        .eq('user_id', signUpData.user.id)
-        .single();
-
-      if (orgError || !membership) {
-        throw new Error('Failed to retrieve organization assignment');
-      }
-
-      // 4. Get selected plan details
+      // Step 2: Create Stripe Checkout Session (Standard Plans)
       const selectedPlanData = PLANS_DATA.find(p => p.id === selectedPlan);
       if (!selectedPlanData) throw new Error('Invalid plan selected');
 
-      // 5. Handle VIP/Custom Plan (Direct registration, no Stripe)
+      // Handle VIP/Custom Plan (Direct registration, no Stripe)
       if (selectedPlan === 'vip' || !selectedPlanData.stripePriceId) {
         console.log('[SignUp] VIP Plan selected, skipping Stripe redirect');
-        // Close modal on success
         alert('Institutional registration successful. The Armonyco Elite team will contact you within 2 hours for bespoke activation.');
-        window.location.reload(); // Refresh to show logged in state
+        window.location.reload();
         return;
       }
 
-      // 6. Create Stripe Checkout Session (Standard Plans)
+      // Standard Plans: Call Stripe API with userId (backend will resolve organizationId)
       const checkoutSession = await stripeApi.createCheckoutSession({
         priceId: selectedPlanData.stripePriceId,
-        organizationId: membership.organization_id, // Used membership
+        userId: signUpData.user.id,
         email: formData.email,
         planId: selectedPlan,
         planName: selectedPlanData.name,
@@ -136,7 +125,7 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
         credits: selectedPlanData.includedCredits
       });
 
-      // 7. Redirect to Stripe Checkout
+      // Step 3: Redirect to Stripe Checkout
       if (checkoutSession.url) {
         window.location.href = checkoutSession.url;
       } else {

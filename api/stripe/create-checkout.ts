@@ -1,13 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || '';
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || '';
+
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    // CORS headers
+    // ... CORS headers (unchanged)
     const origin = req.headers.origin || '';
     const allowedOrigins = [
         'http://localhost:3000',
         'http://localhost:5173',
-        'https://app.armonyco.com', // Replace with real production URL
+        'https://app.armonyco.com',
     ];
 
     if (allowedOrigins.includes(origin) || process.env.NODE_ENV === 'development') {
@@ -28,14 +34,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const {
+        let {
             planId,
             planName,
-            priceId,     // Optional, if pre-configured
-            amount,      // Price in cents
-            credits,     // Plan credits
+            priceId,
+            amount,
+            credits,
             email,
-            organizationId, // Added for Armonyco multi-tenancy
+            organizationId,
             userId,
             metadata,
             successUrl,
@@ -43,8 +49,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             mode = 'subscription'
         } = req.body;
 
+        // If organizationId is missing but userId is present, try to fetch it (Sign-up flow)
+        if (!organizationId && userId) {
+            console.log(`[API] 🔍 Missing organizationId for user ${userId}, attempting lookup...`);
+
+            // Retry logic (3 attempts)
+            for (let i = 0; i < 5; i++) {
+                const { data: membership } = await supabaseAdmin
+                    .from('organization_members')
+                    .select('organization_id')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (membership) {
+                    organizationId = membership.organization_id;
+                    console.log(`[API] ✅ Organization found: ${organizationId}`);
+                    break;
+                }
+
+                if (i < 4) {
+                    console.log(`[API] ⏳ Org bit busy... retry ${i + 1}/5`);
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+            }
+        }
+
         if (!email || !organizationId) {
-            return res.status(400).json({ error: 'Missing required fields: email, organizationId' });
+            return res.status(400).json({
+                error: 'Missing required fields',
+                message: 'Email and Organization ID (or User ID for lookup) are required.'
+            });
         }
 
         if (!process.env.STRIPE_SECRET_KEY) {

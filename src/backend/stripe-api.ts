@@ -40,14 +40,16 @@ export class StripeApiService {
      * @param organizationId - The tenant's organization ID
      */
     async createCheckoutSession(params: {
-        priceId: string;
-        organizationId: string;
-        email: string;
+        priceId?: string;
+        amount?: number;
         planId?: string;
         planName?: string;
-        mode?: 'subscription' | 'payment';
-        amount?: number;
         credits?: number;
+        email: string;
+        organizationId?: string;
+        userId?: string;
+        mode?: 'payment' | 'subscription';
+        metadata?: Record<string, any>;
     }): Promise<StripeSessionResponse> {
         try {
             console.log(`[Stripe] Creating session for:`, params);
