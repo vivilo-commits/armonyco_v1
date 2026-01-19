@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vercel dev",
+    "dev:vite": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
@@ -50,6 +51,7 @@
     "prettier": "^3.8.0",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.8.2",
+    "vercel": "^50.4.5",
     "vite": "^6.2.0"
   },
   "lint-staged": {

@@ -52,7 +52,7 @@ export class StripeApiService {
         metadata?: Record<string, any>;
     }): Promise<StripeSessionResponse> {
         try {
-            console.log(`[Stripe] Creating session for:`, params);
+            console.log(`[Stripe] 🔄 Creating session...`, params);
 
             const response = await fetch('/api/stripe/create-checkout', {
                 method: 'POST',
@@ -60,14 +60,25 @@ export class StripeApiService {
                 body: JSON.stringify(params)
             });
 
+            const text = await response.text();
+
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to create checkout session');
+                try {
+                    const errorJson = JSON.parse(text);
+                    throw new Error(errorJson.message || errorJson.error || 'Failed to create checkout session');
+                } catch (e) {
+                    throw new Error(`API Error (${response.status}): ${text.slice(0, 150)}`);
+                }
             }
 
-            return await response.json();
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                console.error('[Stripe] JSON Parse Error. Raw response:', text);
+                throw new Error('Invalid response from payment server. Please check local API status.');
+            }
         } catch (error) {
-            console.error('[Stripe] Failed to create checkout session:', error);
+            console.error('[Stripe] Checkout error:', error);
             throw error;
         }
     }
