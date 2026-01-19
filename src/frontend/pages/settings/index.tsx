@@ -25,6 +25,7 @@ import {
 import { ConfigureWhatsAppModal } from '@/frontend/components/modals/ConfigureWhatsAppModal';
 import { ConfigurePMSModal } from '@/frontend/components/modals/ConfigurePMSModal';
 import { UploadKnowledgeModal } from '@/frontend/components/modals/UploadKnowledgeModal';
+import { Plans } from '@/frontend/components/modals/PlansModal';
 
 import { api } from '@/backend/api';
 import { usePageData } from '@/frontend/hooks/usePageData';
@@ -42,6 +43,8 @@ export const Settings: React.FC = () => {
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [pmsModalOpen, setPmsModalOpen] = useState(false);
   const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
+  const [plansModalOpen, setPlansModalOpen] = useState(false);
+  const [refilling, setRefilling] = useState(false);
 
   // Editable fields - Identity
   const [fullName, setFullName] = useState('');
@@ -147,6 +150,38 @@ export const Settings: React.FC = () => {
     } finally {
       setSaving(false);
       setTimeout(() => setSaveMessage(''), 3000);
+    }
+  };
+
+  const handleBuyCredits = async () => {
+    if (!organization || !profile?.email) return;
+    setRefilling(true);
+    try {
+      const { stripeApi, STRIPE_CONFIG } = await import('@/backend/stripe-api');
+      const { url } = await stripeApi.createCheckoutSession({
+        priceId: STRIPE_CONFIG.TIERS.TOP_UP.priceId,
+        organizationId: organization.id,
+        email: profile.email,
+        planName: STRIPE_CONFIG.TIERS.TOP_UP.name,
+        credits: STRIPE_CONFIG.TIERS.TOP_UP.credits,
+        mode: 'payment'
+      });
+      window.location.href = url;
+    } catch (error) {
+      console.error('[Settings] Refill failed:', error);
+      alert('Failed to initiate checkout. Please try again.');
+    } finally {
+      setRefilling(false);
+    }
+  };
+
+  const handleToggleAutoTopup = async (enabled: boolean) => {
+    try {
+      await api.updateAutoTopup(enabled, autoTopupThreshold, autoTopupAmount);
+      setAutoTopupEnabled(enabled);
+      await refreshProfile();
+    } catch (e) {
+      console.error('Failed to toggle auto top-up:', e);
     }
   };
 
@@ -566,7 +601,13 @@ export const Settings: React.FC = () => {
                         Add one-time credits to your institutional balance. Credits never expire.
                       </p>
                       <div className="space-y-4">
-                        <AppButton variant="primary" className="w-full" icon={<Zap size={16} />}>
+                        <AppButton
+                          variant="primary"
+                          className="w-full"
+                          icon={<Zap size={16} />}
+                          onClick={handleBuyCredits}
+                          loading={refilling}
+                        >
                           Add Credits Now
                         </AppButton>
                         <p className="text-center text-[10px] text-stone-400">
@@ -581,7 +622,7 @@ export const Settings: React.FC = () => {
                           <Crown size={14} className="text-stone-400" /> Auto Top-up
                         </h4>
                         <button
-                          onClick={() => setAutoTopupEnabled(!autoTopupEnabled)}
+                          onClick={() => handleToggleAutoTopup(!autoTopupEnabled)}
                           className={`w-10 h-5 rounded-full transition-all relative ${autoTopupEnabled ? 'bg-gold-start' : 'bg-stone-300'}`}
                         >
                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoTopupEnabled ? 'left-6' : 'left-1'}`} />
@@ -604,7 +645,11 @@ export const Settings: React.FC = () => {
                     <p className="text-sm text-stone-500 mb-6 max-w-sm">
                       Upgrade to a higher tier for increased capacity, priority execution, and advanced cognitive depth.
                     </p>
-                    <AppButton variant="secondary" icon={<Crown size={18} className="text-gold-start" />}>
+                    <AppButton
+                      variant="secondary"
+                      icon={<Crown size={18} className="text-gold-start" />}
+                      onClick={() => setPlansModalOpen(true)}
+                    >
                       Explore Plans & Tiers
                     </AppButton>
                   </div>
@@ -625,6 +670,7 @@ export const Settings: React.FC = () => {
         isOpen={knowledgeModalOpen}
         onClose={() => setKnowledgeModalOpen(false)}
       />
+      <Plans isOpen={plansModalOpen} onClose={() => setPlansModalOpen(false)} />
     </AppPage>
   );
 };

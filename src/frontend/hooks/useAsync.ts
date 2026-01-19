@@ -16,13 +16,17 @@ export const useAsync = <T>(asyncFunction: () => Promise<T>, immediate = true) =
   });
 
   const execute = useCallback(() => {
-    setState({ status: 'pending', data: null, error: null });
+    setState((prevState) => ({ ...prevState, status: 'pending', error: null }));
     return asyncFunction()
       .then((response) => {
         setState({ status: 'success', data: response, error: null });
       })
       .catch((error) => {
-        setState({ status: 'error', data: null, error: error.message || 'Something went wrong' });
+        setState((prevState) => ({
+          status: 'error',
+          data: prevState.data,
+          error: error.message || 'Something went wrong'
+        }));
       });
   }, [asyncFunction]);
 

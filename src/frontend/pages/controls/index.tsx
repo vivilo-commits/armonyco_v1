@@ -30,6 +30,48 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
     intelligenceMode: 'Standard' | 'Advanced' | 'Pro' | 'Elite' | 'Max';
   }>(() => api.getControlsData());
 
+  const [toneOfVoice, setToneOfVoice] = React.useState('');
+  const [languages, setLanguages] = React.useState('');
+  const [formalityLevel, setFormalityLevel] = React.useState('');
+  const [brandKeywords, setBrandKeywords] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  // Sync local state when data loads
+  React.useEffect(() => {
+    if (data) {
+      setToneOfVoice(data.toneOfVoice || '');
+      setLanguages(data.languages?.join(', ') || '');
+      setFormalityLevel(data.formalityLevel || '');
+      setBrandKeywords(data.brandKeywords || '');
+    }
+  }, [data]);
+
+  const hasChanges = data && (
+    toneOfVoice !== (data.toneOfVoice || '') ||
+    languages !== (data.languages?.join(', ') || '') ||
+    formalityLevel !== (data.formalityLevel || '') ||
+    brandKeywords !== (data.brandKeywords || '')
+  );
+
+  const handleCommitChanges = async () => {
+    setSaving(true);
+    try {
+      await api.updateGeneralSettings({
+        tone_of_voice: toneOfVoice,
+        languages: languages.split(',').map(l => l.trim()).filter(Boolean),
+        formality_level: formalityLevel,
+        brand_keywords: brandKeywords
+      });
+      setShowSaveModal(true);
+      retry();
+    } catch (e) {
+      console.error('Failed to commit changes:', e);
+      alert('Failed to save changes. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const filteredEngines = React.useMemo(() => {
     if (!data?.engines) return [];
     if (!searchTerm) return data.engines;
@@ -87,7 +129,9 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
           <AppButton
             variant="primary"
             icon={<Shield size={16} />}
-            onClick={() => setShowSaveModal(true)}
+            onClick={handleCommitChanges}
+            disabled={!hasChanges || saving}
+            loading={saving}
           >
             Commit Changes
           </AppButton>
@@ -126,26 +170,26 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
                   <FormField
                     label="Tone preset"
                     placeholder="Professional & Warm"
-                    value={data?.toneOfVoice || ''}
-                    onChange={() => { }}
+                    value={toneOfVoice}
+                    onChange={(e) => setToneOfVoice(e.target.value)}
                   />
                   <FormField
                     label="Languages"
                     placeholder="English, Italian, Spanish"
-                    value={data?.languages?.join(', ') || ''}
-                    onChange={() => { }}
+                    value={languages}
+                    onChange={(e) => setLanguages(e.target.value)}
                   />
                   <FormField
                     label="Formality level"
                     placeholder="Medium"
-                    value={data?.formalityLevel || ''}
-                    onChange={() => { }}
+                    value={formalityLevel}
+                    onChange={(e) => setFormalityLevel(e.target.value)}
                   />
                   <FormField
                     label="Brand keywords"
                     placeholder="Premium, Reliable, Direct"
-                    value={data?.brandKeywords || ''}
-                    onChange={() => { }}
+                    value={brandKeywords}
+                    onChange={(e) => setBrandKeywords(e.target.value)}
                   />
                 </div>
               </AppSection>
@@ -198,7 +242,17 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
                       <div className="p-6">
                         <div className="flex items-center justify-between mb-4">
                           <div className="font-bold text-sm text-stone-900 group-hover:text-gold-start transition-colors">{engine.name}</div>
-                          <AppSwitch checked={engine.status === 'Active'} onChange={() => { }} />
+                          <AppSwitch
+                            checked={engine.status === 'Active'}
+                            onChange={async (checked) => {
+                              try {
+                                await api.updateEngineStatus(engine.id, checked ? 'Active' : 'Paused');
+                                retry();
+                              } catch (e) {
+                                console.error('Failed to update engine status:', e);
+                              }
+                            }}
+                          />
                         </div>
                         <p className="text-[10px] text-stone-500 leading-relaxed min-h-[30px]">
                           {engine.summary}

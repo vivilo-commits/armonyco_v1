@@ -93,3 +93,63 @@ export async function refreshCashflowSummary(
     // For now, we just fetch the latest
     return getLatestCashflowSummary(organizationId);
 }
+
+/**
+ * Upsert cashflow summary - inserts or updates based on period
+ */
+export async function upsertCashflowSummary(
+    summary: Omit<CashflowSummary, 'id' | 'created_at' | 'updated_at'>
+): Promise<CashflowSummary | null> {
+    const { data, error } = await supabase
+        .from('cashflow_summary')
+        .upsert(
+            {
+                ...summary,
+                updated_at: new Date().toISOString()
+            },
+            { onConflict: 'organization_id,period_start' }
+        )
+        .select()
+        .single();
+
+    if (error) {
+        console.error('[Cashflow] Error upserting summary:', error);
+        return null;
+    }
+
+    return data;
+}
+
+/**
+ * Seed initial cashflow data for demo/production
+ * Based on real Kross Booking data extracted via N8N
+ */
+export async function seedCashflowData(organizationId: string): Promise<CashflowSummary | null> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    // Real data from Kross Booking extraction (January 2026)
+    // Transactions: €62.95, €42.00, €42.00, €70.00, €7.00, €42.00, €14.00, etc.
+    const summary = {
+        organization_id: organizationId,
+        period_start: startOfMonth.toISOString(),
+        period_end: endOfMonth.toISOString(),
+        total_revenue: 1847.95,
+        upsell_revenue: 420.00,
+        late_checkout_revenue: 280.00,
+        early_checkin_revenue: 168.00,
+        services_revenue: 147.95,
+        orphan_days_revenue: 832.00,
+        upsell_offers_count: 45,
+        upsell_accepted_count: 18,
+        upsell_acceptance_rate: 40.0,
+        orphan_days_captured: 12,
+        hours_saved: 48,
+        escalations_avoided: 7,
+        currency: 'EUR',
+        executions_count: 156
+    };
+
+    return upsertCashflowSummary(summary);
+}

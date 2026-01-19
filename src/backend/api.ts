@@ -53,8 +53,9 @@ class ApiService {
       if (this.organizationId && !options.eq?.organization_id) {
         // We assume all relevant tables have organization_id
         // Tables like 'profiles' might not, so we handle them or let RLS handle it
+        // Note: vivilo_whatsapp_history is excluded as it uses session_id, not organization_id
         const tenantTables = [
-          'executions', 'vivilo_whatsapp_history', 'cashflow_summary',
+          'executions', 'cashflow_summary',
           'escalations', 'engines', 'addons', 'settings',
           'organization_hotels', 'organization_pms_config',
           'organization_entitlements', 'credits_transactions'
@@ -242,6 +243,47 @@ class ApiService {
     return response.json();
   }
 
+  async updateGeneralSettings(settings: {
+    tone_of_voice: string;
+    languages: string[];
+    formality_level: string;
+    brand_keywords: string;
+  }) {
+    const url = `${SUPABASE_URL}/rest/v1/settings?organization_id=eq.${this.organizationId}`;
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(settings)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update general settings: ${response.status}`);
+    }
+    return response.json();
+  }
+
+  async updateEngineStatus(id: string, status: 'Active' | 'Paused') {
+    const url = `${SUPABASE_URL}/rest/v1/engines?id=eq.${id}&organization_id=eq.${this.organizationId}`;
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ status })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update engine status: ${response.status}`);
+    }
+    return response.json();
+  }
+
   // --- Escalations ---
 
   async getEscalationsData(status?: string) {
@@ -283,6 +325,28 @@ class ApiService {
       throw new Error(`Failed to resolve escalation: ${response.status}`);
     }
 
+    return response.json();
+  }
+
+  async updateAutoTopup(enabled: boolean, threshold: number, amount: number) {
+    const url = `${SUPABASE_URL}/rest/v1/organization_entitlements?organization_id=eq.${this.organizationId}`;
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        auto_topup_enabled: enabled,
+        auto_topup_threshold: threshold,
+        auto_topup_amount: amount
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update auto top-up: ${response.status}`);
+    }
     return response.json();
   }
 

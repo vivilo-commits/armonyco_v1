@@ -12,7 +12,8 @@ interface PlansProps {
 
 export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
   const [buying, setBuying] = useState(false);
-  const { organizationId, user } = useAuth();
+  const { organizationId, user, entitlements } = useAuth();
+  const currentPlanId = entitlements?.plan_tier?.toLowerCase() || 'starter';
 
   const handleBuyCredits = async () => {
     if (!organizationId || !user?.email) return;
@@ -164,10 +165,15 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
 
                 <button
                   onClick={() => handleSelectPlan(plan.stripePriceId, plan)}
-                  disabled={buying || !plan.stripePriceId}
-                  className={`w-full py-3 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all ${isPopular ? 'bg-white text-stone-900 hover:bg-stone-50' : 'bg-stone-900 text-white hover:bg-stone-800 shadow-md'} disabled:opacity-50`}
+                  disabled={buying || !plan.stripePriceId || currentPlanId === plan.id}
+                  className={`w-full py-3 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all ${isPopular
+                      ? 'bg-white text-stone-900 hover:bg-stone-50'
+                      : currentPlanId === plan.id
+                        ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                        : 'bg-stone-900 text-white hover:bg-stone-800 shadow-md'
+                    } disabled:opacity-50`}
                 >
-                  {buying ? 'Redirecting...' : plan.cta}
+                  {buying ? 'Redirecting...' : currentPlanId === plan.id ? 'Current Plan' : plan.cta}
                 </button>
               </div>
             );

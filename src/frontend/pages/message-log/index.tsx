@@ -39,7 +39,8 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
     if (realtimeTrigger > 0) {
       execute();
     }
-  }, [realtimeTrigger, execute]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [realtimeTrigger]);
 
   // REAL-TIME SUBSCRIPTION
   useEffect(() => {
