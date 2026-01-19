@@ -102,26 +102,33 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
       // Wait a moment for the trigger to complete
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      const { data: orgMember, error: orgError } = await supabase
+      const { data: membership, error: orgError } = await supabase
         .from('organization_members')
         .select('organization_id')
         .eq('user_id', signUpData.user.id)
         .single();
 
-      if (orgError || !orgMember) {
+      if (orgError || !membership) {
         throw new Error('Failed to retrieve organization assignment');
       }
 
-      // Step 3: Get selected plan details
+      // 4. Get selected plan details
       const selectedPlanData = PLANS_DATA.find(p => p.id === selectedPlan);
-      if (!selectedPlanData || !selectedPlanData.stripePriceId) {
-        throw new Error('Invalid plan selected');
+      if (!selectedPlanData) throw new Error('Invalid plan selected');
+
+      // 5. Handle VIP/Custom Plan (Direct registration, no Stripe)
+      if (selectedPlan === 'vip' || !selectedPlanData.stripePriceId) {
+        console.log('[SignUp] VIP Plan selected, skipping Stripe redirect');
+        // Close modal on success
+        alert('Institutional registration successful. The Armonyco Elite team will contact you within 2 hours for bespoke activation.');
+        window.location.reload(); // Refresh to show logged in state
+        return;
       }
 
-      // Step 4: Create Stripe Checkout Session
+      // 6. Create Stripe Checkout Session (Standard Plans)
       const checkoutSession = await stripeApi.createCheckoutSession({
         priceId: selectedPlanData.stripePriceId,
-        organizationId: orgMember.organization_id,
+        organizationId: membership.organization_id, // Used membership
         email: formData.email,
         planId: selectedPlan,
         planName: selectedPlanData.name,
@@ -129,7 +136,7 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
         credits: selectedPlanData.includedCredits
       });
 
-      // Step 5: Redirect to Stripe Checkout
+      // 7. Redirect to Stripe Checkout
       if (checkoutSession.url) {
         window.location.href = checkoutSession.url;
       } else {
@@ -435,7 +442,7 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
           <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {PLANS_DATA.map((plan) => {
-                const isVIP = plan.id === 'enterprise';
+                const isCustom = plan.id === 'vip';
                 return (
                   <button
                     key={plan.id}
@@ -464,7 +471,7 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
                       >
                         {plan.price}
                       </span>
-                      {!isVIP && (
+                      {!isCustom && (
                         <span className="text-[9px] uppercase font-bold tracking-widest ml-1 opacity-50">
                           / mo
                         </span>
@@ -473,7 +480,7 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
                     <div
                       className={`text-[10px] font-semibold ${selectedPlan === plan.id ? 'text-stone-300' : 'text-stone-500'}`}
                     >
-                      {isVIP
+                      {isCustom
                         ? 'Bespoke tailored'
                         : `${plan.includedCredits.toLocaleString()} ArmoCredits™`}
                     </div>
@@ -490,10 +497,10 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
                 <ChevronLeft size={16} /> Back
               </button>
               <button
-                onClick={nextStep}
+                onClick={selectedPlan === 'vip' ? handleFinalize : nextStep}
                 className="flex-[2] text-white bg-stone-900 hover:bg-stone-800 font-bold rounded-xl text-xs uppercase tracking-widest py-4 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2"
               >
-                Proceed to Activation <ArrowRight size={16} />
+                {selectedPlan === 'vip' ? 'Contact for Bespoke Setup' : 'Proceed to Activation'} <ArrowRight size={16} />
               </button>
             </div>
           </div>
@@ -517,12 +524,17 @@ export const SignUpModal: React.FC<SignUpModalProps> = ({ isOpen, onClose }) => 
                 </div>
 
                 <div className="space-y-4 py-8 border-y border-white/5 my-6 flex flex-col items-center justify-center text-stone-400 text-sm">
-                  <CreditCard size={48} className="opacity-20 mb-2" />
-                  <p className="text-xs font-medium">
-                    Secure checkout powered by Stripe
+                  <div className="flex gap-4 mb-2">
+                    <img src={ASSETS.logos.icon} alt="" className="w-8 h-8 grayscale opacity-50" />
+                    <ArrowRight size={24} className="text-white/10" />
+                    <CreditCard size={32} className="text-gold-start" />
+                  </div>
+                  <p className="text-xs font-medium text-center">
+                    You will be redirected to <span className="text-white">Stripe Secure Checkout</span><br />
+                    to complete your institutional activation.
                   </p>
-                  <p className="text-[10px] uppercase tracking-widest opacity-50 font-bold">
-                    {formData.companyName}
+                  <p className="text-[9px] uppercase tracking-widest opacity-30 font-bold mt-2">
+                    Encryption: AES-256 Protocol
                   </p>
                 </div>
 
