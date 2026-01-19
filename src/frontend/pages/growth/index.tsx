@@ -123,14 +123,14 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           subtitle="Efficiency and risk reduction that compounds over time."
         >
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            {[
-              { label: 'Hours Saved', value: '0h', sub: 'Operational Time' },
-              { label: 'Escalations Avoided', value: '0', sub: 'Prevented Issues', status: 'success' },
-              { label: 'Response Time', value: '< 2min', sub: 'Avg. First Response' },
-              { label: 'Automation Rate', value: '0%', sub: 'Autonomous Actions' },
-              { label: 'Guest Satisfaction', value: '0%', sub: 'Positive Feedback' },
-              { label: 'Cost Savings', value: '€ 0,00', sub: 'Labor Reduction' },
-            ].map((item, i) => (
+            {(data?.valueCreated || [
+              { label: 'Hours Saved', value: '0h' },
+              { label: 'Escalations Avoided', value: '0' },
+              { label: 'Response Time', value: '< 2min' },
+              { label: 'Automation Rate', value: '0%' },
+              { label: 'Guest Satisfaction', value: '0%' },
+              { label: 'Cost Savings', value: '€ 0,00' },
+            ]).map((item: any, i: number) => (
               <AppKPICard
                 key={i}
                 variant="light"
@@ -138,10 +138,10 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
                   id: `v-cre-${i}`,
                   label: item.label,
                   value: item.value,
-                  subtext: item.sub,
-                  trend: 5.2,
-                  trendLabel: '+12%',
-                  status: (item.status as any) || 'neutral',
+                  subtext: '',
+                  trend: 0,
+                  trendLabel: '',
+                  status: 'neutral',
                 }}
               />
             ))}
