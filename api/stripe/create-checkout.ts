@@ -60,14 +60,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             // Retry logic (3 attempts)
             for (let i = 0; i < 5; i++) {
-                const { data: membership } = await supabaseAdmin
+                const { data: memberships, error: lookupError } = await supabaseAdmin
                     .from('organization_members')
                     .select('organization_id')
                     .eq('user_id', userId)
-                    .single();
+                    .order('created_at', { ascending: false })
+                    .limit(1);
 
-                if (membership) {
-                    organizationId = membership.organization_id;
+                if (lookupError) {
+                    console.error(`[API] ❌ Lookup error for user ${userId}:`, lookupError);
+                }
+
+                if (memberships && memberships.length > 0) {
+                    organizationId = memberships[0].organization_id;
                     console.log(`[API] ✅ Organization found: ${organizationId}`);
                     break;
                 }
