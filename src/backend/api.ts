@@ -102,7 +102,10 @@ class ApiService {
   // --- Dashboard Data ---
 
   async getDashboardData() {
-    const [executions, history, cashflow] = await Promise.all([
+    // Import cashflow aggregation
+    const { getCashflowAggregation } = await import('./cashflow-api');
+
+    const [executions, history, cashflowAgg] = await Promise.all([
       this.supabaseFetch<Execution[]>('executions', {
         order: { column: 'started_at', ascending: false },
         limit: 50
@@ -111,12 +114,11 @@ class ApiService {
         order: { column: 'id', ascending: false },
         limit: 100
       }),
-      this.supabaseFetch<CashflowSummary[]>('cashflow_summary', { limit: 1 }),
+      getCashflowAggregation(this.organizationId || undefined),
     ]);
 
     const safeExecutions = executions || [];
     const safeHistory = history || [];
-    const safeCashflow = cashflow?.[0] || null;
 
     // Map Execution to ExecutionEvent for the dashboard table
     const events: ExecutionEvent[] = safeExecutions.map(exec => {
@@ -140,14 +142,25 @@ class ApiService {
       };
     });
 
-    // Use original calculation logic for 12 KPIs
-    const kpis = calculateDashboardKPIs(safeExecutions, safeHistory.length, safeCashflow);
+    // Use cashflow aggregation for KPIs
+    const kpis = calculateDashboardKPIs(safeExecutions, safeHistory.length, {
+      total_revenue: cashflowAgg.total_revenue,
+      executions_count: cashflowAgg.transaction_count,
+      upsell_acceptance_rate: 0,
+      upsell_accepted_count: 0,
+      upsell_offers_count: 0,
+      orphan_days_captured: 0,
+      late_checkout_revenue: 0,
+      early_checkin_revenue: 0,
+      services_revenue: 0,
+      escalations_avoided: 0,
+    } as CashflowSummary);
 
     return {
       kpis,
       events, // Dashboard expects 'events' as ExecutionEvent[]
       whatsappHistory: safeHistory,
-      cashflow: safeCashflow
+      cashflow: cashflowAgg
     };
   }
 

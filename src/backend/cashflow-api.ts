@@ -2,78 +2,64 @@ import { supabase } from '@/database/supabase';
 
 /**
  * Cashflow API Service
- * Handles fetching and managing cashflow summary data
+ * Handles fetching and managing cashflow data from the new table structure
  */
 
-export interface CashflowSummary {
+// New table schema: guest, code, management_date, collection_date, payment_method, quantity, total_amount, operator
+export interface CashflowTransaction {
     id: string;
     organization_id?: string;
-    period_start: string;
-    period_end: string;
-    total_revenue: number;
-    upsell_revenue: number;
-    late_checkout_revenue: number;
-    early_checkin_revenue: number;
-    services_revenue: number;
-    orphan_days_revenue: number;
-    upsell_offers_count: number;
-    upsell_accepted_count: number;
-    upsell_acceptance_rate: number;
-    orphan_days_captured: number;
-    hours_saved: number;
-    escalations_avoided: number;
-    currency: string;
-    executions_count: number;
+    guest: string;
+    code: string;
+    management_date: string;
+    collection_date: string;
+    payment_method: string;
+    quantity: number;
+    total_amount: string; // "€ 56,00" format
+    operator?: string;
     created_at: string;
-    updated_at: string;
+}
+
+export interface CashflowAggregation {
+    total_revenue: number;
+    transaction_count: number;
+    cash_count: number;
+    stripe_count: number;
+    transfer_count: number;
+    avg_transaction: number;
 }
 
 /**
- * Get latest cashflow summary
+ * Parse currency string to number
+ * Converts "€ 56,00" or "€56,00" to 56.00
  */
-export async function getLatestCashflowSummary(organizationId: string): Promise<CashflowSummary | null> {
-    const { data, error } = await supabase
-        .from('cashflow_summary')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .order('period_end', { ascending: false })
-        .limit(1)
-        .single();
-
-    if (error) {
-        console.error('[Cashflow] Error fetching summary:', error);
-        return null;
-    }
-
-    return data;
+export function parseCurrency(value: string): number {
+    if (!value) return 0;
+    // Remove € symbol, spaces, and convert comma to dot
+    const cleaned = value
+        .replace('€', '')
+        .replace(/\s/g, '')
+        .replace(',', '.');
+    return parseFloat(cleaned) || 0;
 }
 
 /**
- * Get cashflow summaries for a date range
+ * Get all cashflow transactions
  */
-export async function getCashflowSummaries(
-    organizationId: string,
-    startDate?: string,
-    endDate?: string
-): Promise<CashflowSummary[]> {
+export async function getCashflowTransactions(organizationId?: string): Promise<CashflowTransaction[]> {
     let query = supabase
         .from('cashflow_summary')
         .select('*')
-        .eq('organization_id', organizationId)
-        .order('period_start', { ascending: false });
+        .order('collection_date', { ascending: false });
 
-    if (startDate) {
-        query = query.gte('period_start', startDate);
-    }
-
-    if (endDate) {
-        query = query.lte('period_end', endDate);
+    if (organizationId) {
+        query = query.eq('organization_id', organizationId);
     }
 
     const { data, error } = await query;
 
     if (error) {
-        console.error('[Cashflow] Error fetching summaries:', error);
+        console.error('[Cashflow] Error fetching transactions:', error);
         return [];
     }
 
@@ -81,75 +67,74 @@ export async function getCashflowSummaries(
 }
 
 /**
- * Refresh cashflow summary from executions
- * This should be called by n8n Governed Cashflow workflow
+ * Get aggregated cashflow summary for Dashboard
  */
-export async function refreshCashflowSummary(
-    organizationId: string,
-    _periodStart: string,
-    _periodEnd: string
-): Promise<CashflowSummary | null> {
-    // This will be called by n8n workflow after it processes data
-    // For now, we just fetch the latest
-    return getLatestCashflowSummary(organizationId);
+export async function getCashflowAggregation(organizationId?: string): Promise<CashflowAggregation> {
+    const transactions = await getCashflowTransactions(organizationId);
+
+    const totals = transactions.reduce((acc, tx) => {
+        const amount = parseCurrency(tx.total_amount);
+        acc.total_revenue += amount;
+        acc.transaction_count += 1;
+
+        const method = tx.payment_method?.toLowerCase() || '';
+        if (method.includes('contanti') || method.includes('cash')) {
+            acc.cash_count += 1;
+        } else if (method.includes('stripe')) {
+            acc.stripe_count += 1;
+        } else if (method.includes('bonifico') || method.includes('transfer')) {
+            acc.transfer_count += 1;
+        }
+
+        return acc;
+    }, {
+        total_revenue: 0,
+        transaction_count: 0,
+        cash_count: 0,
+        stripe_count: 0,
+        transfer_count: 0,
+        avg_transaction: 0
+    });
+
+    totals.avg_transaction = totals.transaction_count > 0
+        ? totals.total_revenue / totals.transaction_count
+        : 0;
+
+    return totals;
 }
 
 /**
- * Upsert cashflow summary - inserts or updates based on period
+ * Get cashflow for specific date range
  */
-export async function upsertCashflowSummary(
-    summary: Omit<CashflowSummary, 'id' | 'created_at' | 'updated_at'>
-): Promise<CashflowSummary | null> {
-    const { data, error } = await supabase
+export async function getCashflowForPeriod(
+    startDate: string,
+    endDate: string,
+    organizationId?: string
+): Promise<CashflowTransaction[]> {
+    let query = supabase
         .from('cashflow_summary')
-        .upsert(
-            {
-                ...summary,
-                updated_at: new Date().toISOString()
-            },
-            { onConflict: 'organization_id,period_start' }
-        )
-        .select()
-        .single();
+        .select('*')
+        .gte('collection_date', startDate)
+        .lte('collection_date', endDate)
+        .order('collection_date', { ascending: false });
 
-    if (error) {
-        console.error('[Cashflow] Error upserting summary:', error);
-        return null;
+    if (organizationId) {
+        query = query.eq('organization_id', organizationId);
     }
 
-    return data;
+    const { data, error } = await query;
+
+    if (error) {
+        console.error('[Cashflow] Error fetching period data:', error);
+        return [];
+    }
+
+    return data || [];
 }
 
 /**
- * Seed initial cashflow data for demo/production
- * Based on real Kross Booking data extracted via N8N
+ * Format currency for display
  */
-export async function seedCashflowData(organizationId: string): Promise<CashflowSummary | null> {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-    // Real data from Kross Booking extraction (January 2026)
-    // Transactions: €62.95, €42.00, €42.00, €70.00, €7.00, €42.00, €14.00, etc.
-    const summary = {
-        organization_id: organizationId,
-        period_start: startOfMonth.toISOString(),
-        period_end: endOfMonth.toISOString(),
-        total_revenue: 1847.95,
-        upsell_revenue: 420.00,
-        late_checkout_revenue: 280.00,
-        early_checkin_revenue: 168.00,
-        services_revenue: 147.95,
-        orphan_days_revenue: 832.00,
-        upsell_offers_count: 45,
-        upsell_accepted_count: 18,
-        upsell_acceptance_rate: 40.0,
-        orphan_days_captured: 12,
-        hours_saved: 48,
-        escalations_avoided: 7,
-        currency: 'EUR',
-        executions_count: 156
-    };
-
-    return upsertCashflowSummary(summary);
+export function formatCurrency(value: number): string {
+    return `€ ${value.toFixed(2).replace('.', ',')}`;
 }
