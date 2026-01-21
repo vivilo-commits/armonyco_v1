@@ -1,47 +1,33 @@
-import { supabase } from '@/database/supabase';
+import { parseCurrency, formatCurrency } from './utils';
 
 /**
  * Cashflow API Service
- * Handles fetching and managing cashflow data from the new table structure
+ * Handles manual cashflow tracking and aggregations
  */
 
-// New table schema: guest, code, management_date, collection_date, payment_method, quantity, total_amount, operator
 export interface CashflowTransaction {
     id: string;
-    organization_id?: string;
+    organization_id: string;
     guest: string;
     code: string;
-    management_date: string;
-    collection_date: string;
+    total_amount: string; // From DB as formatted string (e.g., "€ 1.250,00")
+    total_amount_eur: number; // For internal calculations
     payment_method: string;
-    quantity: number;
-    total_amount: string; // "€ 56,00" format
-    operator?: string;
+    collection_date: string;
     created_at: string;
 }
 
 export interface CashflowAggregation {
     total_revenue: number;
     transaction_count: number;
+    avg_transaction: number;
     cash_count: number;
     stripe_count: number;
     transfer_count: number;
-    avg_transaction: number;
 }
 
-/**
- * Parse currency string to number
- * Converts "€ 56,00" or "€56,00" to 56.00
- */
-export function parseCurrency(value: string): number {
-    if (!value) return 0;
-    // Remove € symbol, spaces, and convert comma to dot
-    const cleaned = value
-        .replace('€', '')
-        .replace(/\s/g, '')
-        .replace(',', '.');
-    return parseFloat(cleaned) || 0;
-}
+export { parseCurrency, formatCurrency };
+import { supabase } from '@/database/supabase';
 
 /**
  * Get all cashflow transactions
@@ -130,12 +116,4 @@ export async function getCashflowForPeriod(
     }
 
     return data || [];
-}
-
-/**
- * Format currency for display (European format with dots for thousands)
- * Example: 179917.92 → "€ 179.917,92"
- */
-export function formatCurrency(value: number): string {
-    return `€ ${value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }

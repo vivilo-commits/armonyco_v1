@@ -4,15 +4,19 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
+  const env = loadEnv(mode, 'src', '');
 
   return {
+    envDir: 'src',
     plugins: [
       tailwindcss(),
       react()
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+    },
+    build: {
+      outDir: 'src/dist',
     },
     resolve: {
       alias: [

@@ -58,17 +58,32 @@ export type CardVariant = 'light' | 'dark';
 // =============================================================================
 
 export interface ExecutionEvent {
-  id: string;
-  type: string;
-  label?: string;
-  status: AppStatus;
-  verdict?: Verdict;
-  risk?: RiskLevel;
-  time?: string;
-  duration?: string;
+  // Core identification
+  id: string; // execution_id
+  type: string; // workflow_name
+  status: AppStatus; // mapped status
+
+  // Execution details
+  finished?: boolean;
+  mode?: string;
+  started?: string; // formatted timestamp
+  stopped?: string; // formatted timestamp
+  duration?: string; // calculated
+
+  // Governance & Quality
+  verdict?: Verdict; // governance_verdict
+  escalation?: boolean; // human_escalation_triggered
+  escalation_priority?: string;
+  escalation_status?: string;
+
+  // Business metrics
+  value_captured?: number;
+  messages_sent?: number;
+  time_saved?: string; // time_saved_seconds formatted as string
+
+  // Legacy/UI fields
   agent?: string;
-  active?: boolean;
-  latency?: string;
+  risk?: RiskLevel;
 }
 
 export interface EscalationItem {
@@ -83,7 +98,7 @@ export interface EscalationItem {
 }
 
 export interface Escalation {
-  id: string;
+  id: string; // UUID from 'escalations' or bigint from 'executions'
   phone_clean: string;
   execution_id?: string;
   status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
@@ -92,9 +107,18 @@ export interface Escalation {
   resolved_by?: string;
   resolved_by_name?: string;
   resolved_at?: string;
-  metadata?: Record<string, any>;
+  metadata?: {
+    reason?: string;
+    workflow?: string;
+    risk_type?: string;
+    score?: number | string;
+    response_time_minutes?: number;
+    trigger_message?: string;
+    [key: string]: any;
+  };
   created_at: string;
   updated_at: string;
+  organization_id: string;
 }
 
 export interface WhatsAppHistory {
@@ -123,163 +147,61 @@ export interface KPIData {
 // =============================================================================
 
 /**
- * Execution record from the unified 'executions' table
- * This is the single source of truth for all N8N workflow executions
+ * Execution record from the optimized 'executions' table
+ * Schema: 32 essential columns + workflow_output JSONB
+ * Organized by feature area for clarity
  */
 export interface Execution {
-  // Primary Key
-  id: number;
-
-  // N8N Execution Metadata
-  execution_id: string;
-  workflow_id: string;
-  workflow_name: string; // Lara, Amelia, Elon, James
-
-  // Execution Status
-  finished: boolean;
-  mode?: string; // trigger, webhook, manual
-  status: string; // success, running, error, waiting, cancelled
+  // ========== Core n8n Metadata ==========
+  execution_id: string; // Primary key - n8n execution ID (e.g., "AR017709")
+  workflow_id?: string;
+  workflow_name?: string;
+  finished?: boolean;
+  mode?: string;
+  status?: string;
   retry_of?: string;
-  retry_success_id?: string;
+  organization_id?: string;
 
-  // Timestamps
-  n8n_created_at?: string;
+  // ========== Timestamps ==========
   started_at?: string;
   stopped_at?: string;
-  deleted_at?: string;
-  wait_till?: string;
-  duration_ms?: number;
+  created_at?: string;
+  updated_at?: string;
 
-  // Workflow Identification
-  trigger_type?: string;
-  trigger_node_name?: string;
-  parent_execution_id?: string;
-  parent_workflow_id?: string;
-  is_sub_execution: boolean;
-
-  // Reservation Data
-  reservation_code?: string;
-  guest_name?: string;
-  check_in_date?: string;
-  check_out_date?: string;
-  nights?: number;
-  room?: string;
-  guests_count?: number;
-  booking_channel?: string;
-  reservation_status?: string;
-  total_charge?: number;
-  currency: string;
-  country_code?: string;
-  guest_email?: string;
-  guest_phone?: string;
-
-  // Communication Channel
-  channel_type?: string; // whatsapp, krosschat, email, template
-
-  // WhatsApp Data
-  whatsapp_from?: string;
-  whatsapp_to?: string;
-  whatsapp_message_id?: string;
-  whatsapp_message_type?: string;
-  whatsapp_message_body?: string;
-  whatsapp_contact_name?: string;
-  whatsapp_timestamp?: string;
-
-  // KrossChat Data
-  kross_message_id?: string;
-  kross_conversation_id?: string;
-  kross_reservation_id?: string;
-  kross_message_type?: string;
-  kross_message_body?: string;
-  kross_guest_name?: string;
-  kross_channel?: string;
-  kross_timestamp?: string;
-
-  // Actions Performed
-  action_type?: string;
-  template_name?: string;
-  messages_sent: number;
-  checkin_sent: boolean;
-  checkout_sent: boolean;
-  new_booking_sent: boolean;
-  transfer_marketing_sent: boolean;
-  breakfast_marketing_sent: boolean;
-
-  // Value Metrics (Growth)
-  upsell_offered: boolean;
+  // ========== Growth Metrics ==========
+  upsell_offered?: boolean;
+  upsell_accepted?: boolean;
   upsell_type?: string;
-  upsell_accepted: boolean;
-  upsell_value?: number;
-  late_checkout_offered: boolean;
-  late_checkout_accepted: boolean;
   late_checkout_value?: number;
-  early_checkin_offered: boolean;
-  early_checkin_accepted: boolean;
   early_checkin_value?: number;
-  transfer_offered: boolean;
-  transfer_accepted: boolean;
-  transfer_value?: number;
-  breakfast_offered: boolean;
-  breakfast_accepted: boolean;
-  breakfast_value?: number;
-  services_offered: boolean;
-  services_accepted: boolean;
   services_value?: number;
-  orphan_day_captured: boolean;
-  orphan_days_count: number;
-  value_captured: number;
+  orphan_days_count?: number;
+  value_captured?: number;
 
-  // Human Escalation
-  human_escalation_triggered: boolean;
-  human_escalation_score?: number;
-  human_escalation_flagged: boolean;
+  // ========== Escalation Management ==========
+  human_escalation_triggered?: boolean;
   human_escalation_reason?: string;
-  human_notified: boolean;
-  human_notified_at?: string;
-
-  // Escalation Management
   escalation_priority?: string;
-  escalation_status: string;
-  escalation_assigned_to?: string;
-  escalation_sla_minutes?: number;
-  escalation_opened_at?: string;
-  escalation_resolved_at?: string;
-  escalation_resolution_notes?: string;
-  risk_type?: string;
-  risk_confidence?: number;
+  escalation_status?: string;
 
-  // AI Metrics
-  ai_model?: string;
-  ai_tokens_used?: number;
-  ai_estimated_tokens?: number;
-  ai_response_preview?: string;
-
-  // Governance
-  governance_executed: boolean;
+  // ========== Performance & Governance ==========
+  time_saved_seconds?: number;
+  messages_sent?: number;
   governance_verdict?: string;
-  governance_details?: Record<string, unknown>;
+  total_charge?: number;
 
-  // Error Handling
-  error_message?: string;
-  error_node?: string;
-  error_details?: Record<string, unknown>;
-
-  // Time Saved Metrics
-  time_saved_seconds: number;
-  time_saved_mode: string;
-
-  // Performance
-  nodes_executed?: number;
-  slowest_node?: string;
-  slowest_node_time_ms?: number;
-
-  // Raw Data
-  raw_input?: Record<string, unknown>;
-  raw_output?: Record<string, unknown>;
-
-  // System Fields
-  created_at: string;
-  updated_at: string;
+  // ========== Workflow-Specific Data ==========
+  /**
+   * JSONB field containing workflow-specific output data:
+   * - guest: { name, email, phone, whatsapp_contact_name }
+   * - reservation: { code, check_in, check_out, room, nights, guests_count, booking_channel }
+   * - channel: { type, message_id, conversation_id }
+   * - template: { checkin_sent, checkout_sent, new_booking_sent }
+   * - ai: { model, tokens_used, response_preview }
+   * - governance: { details }
+   * - error: { message, node, details }
+   */
+  workflow_output?: Record<string, any>;
 }
 
 // Alias for backward compatibility
@@ -696,22 +618,59 @@ export type SupabaseQuery<T> = Promise<SupabaseQueryResult<T>>;
 export interface CashflowSummary {
   id: string;
   organization_id: string;
-  period_start: string;
-  period_end: string;
-  total_revenue: number;
-  upsell_revenue: number;
-  late_checkout_revenue: number;
-  early_checkin_revenue: number;
-  services_revenue: number;
-  orphan_days_revenue: number;
-  upsell_offers_count: number;
-  upsell_accepted_count: number;
-  upsell_acceptance_rate: number;
-  orphan_days_captured: number;
-  hours_saved: number;
-  escalations_avoided: number;
-  currency: string;
-  executions_count: number;
+  guest?: string;
+  code?: string;
+  operator?: string;
+  total_amount: string; // text in DB
+  payment_method?: string;
+  quantity?: number;
+  management_date?: string;
+  collection_date?: string;
+  created_at: string;
+  // Aggregate fields used by dashboard calculation (calculated from transactional data)
+  total_revenue?: number;
+  upsell_revenue?: number;
+  late_checkout_revenue?: number;
+  early_checkin_revenue?: number;
+  services_revenue?: number;
+  orphan_days_revenue?: number;
+  upsell_offers_count?: number;
+  upsell_accepted_count?: number;
+  upsell_acceptance_rate?: number;
+  orphan_days_captured?: number;
+  hours_saved?: number;
+  escalations_avoided?: number;
+  currency?: string;
+  executions_count?: number;
+  updated_at?: string;
+}
+
+// Alias for clarity when used as transaction data
+export type CashflowTransaction = CashflowSummary;
+
+export interface OrganizationEntitlement {
+  id: string;
+  organization_id: string;
+  credits_balance: number;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  plan_tier: string;
+  subscription_active: boolean;
+  auto_topup_enabled: boolean;
+  auto_topup_threshold?: number;
+  auto_topup_amount?: number;
   created_at: string;
   updated_at: string;
+}
+
+export interface CreditTransaction {
+  id: string;
+  organization_id: string;
+  user_id?: string;
+  execution_id?: string | number;
+  credits_before: number;
+  credits_used: number;
+  credits_after: number;
+  transaction_type: 'purchase' | 'usage' | 'adjustment' | 'bonus' | 'refund';
+  created_at: string;
 }

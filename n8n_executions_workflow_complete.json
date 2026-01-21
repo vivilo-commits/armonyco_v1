@@ -1,0 +1,174 @@
+{
+    "name": "Executions",
+    "nodes": [
+        {
+            "parameters": {
+                "inputSource": "passthrough"
+            },
+            "id": "b80d988a-bef4-442a-94d6-8f3fc5e99ffb",
+            "name": "When Executed by Another Workflow",
+            "type": "n8n-nodes-base.executeWorkflowTrigger",
+            "typeVersion": 1.1,
+            "position": [
+                5984,
+                720
+            ]
+        },
+        {
+            "parameters": {
+                "resource": "execution",
+                "operation": "get",
+                "executionId": "={{ $json.execution_id }}",
+                "options": {
+                    "activeWorkflows": true
+                },
+                "requestOptions": {}
+            },
+            "type": "n8n-nodes-base.n8n",
+            "typeVersion": 1,
+            "position": [
+                6208,
+                816
+            ],
+            "id": "912e34ab-2513-4542-b570-d1cd677b343b",
+            "name": "Get an execution",
+            "credentials": {
+                "n8nApi": {
+                    "id": "WnFx6BDCbjQf6L94",
+                    "name": "n8n account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "path": "76a369fd-615f-4e90-9767-9e16d9bf2398",
+                "options": {}
+            },
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2.1,
+            "position": [
+                5984,
+                912
+            ],
+            "id": "c4fba813-afa0-4018-aca5-d864475231ab",
+            "name": "Webhook",
+            "webhookId": "76a369fd-615f-4e90-9767-9e16d9bf2398"
+        },
+        {
+            "parameters": {
+                "operation": "upsert",
+                "table": "executions",
+                "dataToInsert": "manual",
+                "onConflict": "execution_id",
+                "columnsUi": {
+                    "columnValues": [
+                        {
+                            "column": "execution_id",
+                            "value": "={{ $json.id }}"
+                        },
+                        {
+                            "column": "workflow_id",
+                            "value": "={{ $json.workflowId || null }}"
+                        },
+                        {
+                            "column": "workflow_name",
+                            "value": "={{ $json.workflowData.name || null }}"
+                        },
+                        {
+                            "column": "finished",
+                            "value": "={{ $json.finished || null }}"
+                        },
+                        {
+                            "column": "mode",
+                            "value": "={{ $json.mode || null }}"
+                        },
+                        {
+                            "column": "status",
+                            "value": "={{ $json.status || null }}"
+                        },
+                        {
+                            "column": "retry_of",
+                            "value": "={{ $json.retryOf || null }}"
+                        },
+                        {
+                            "column": "started_at",
+                            "value": "={{ $json.startedAt || null }}"
+                        },
+                        {
+                            "column": "stopped_at",
+                            "value": "={{ $json.stoppedAt || null }}"
+                        },
+                        {
+                            "column": "organization_id",
+                            "value": "fdca9122-7683-472b-a13f-20cb43bbb9ff"
+                        },
+                        {
+                            "column": "workflow_output",
+                            "value": "={{ JSON.stringify($json.data || {}) }}"
+                        }
+                    ]
+                }
+            },
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                6432,
+                816
+            ],
+            "id": "INSERT_TO_SUPABASE_123",
+            "name": "Upsert to Supabase",
+            "credentials": {
+                "supabaseApi": {
+                    "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+                    "name": "Supabase account"
+                }
+            }
+        }
+    ],
+    "connections": {
+        "When Executed by Another Workflow": {
+            "main": [
+                [
+                    {
+                        "node": "Get an execution",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get an execution": {
+            "main": [
+                [
+                    {
+                        "node": "Upsert to Supabase",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Get an execution",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "8aa755348f906dd1978701f96427e64a114b2218fd518a13d48bfad88a60137a"
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "availableInMCP": true
+    },
+    "id": "MWXnAtKd8tzVJayI",
+    "active": true
+}

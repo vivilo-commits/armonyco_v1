@@ -137,7 +137,6 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
           </div>
         </AppCard>
 
-        {/* EVENT STREAM TABLE */}
         <AppSection
           title="Execution Stream"
           subtitle="Every operation recorded as truth. Click any row for full proof."
@@ -145,44 +144,60 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
         >
           <AppTable
             headers={[
-              'Truth ID',
+              'ID',
               'Workflow',
-              'Agent',
               'Status',
-              'Verdict',
               'Started',
+              'Stopped',
               'Duration',
-              'Credits',
-              'Risk',
+              'Verdict',
+              'Escalation',
+              'Value €',
+              'Messages',
             ]}
           >
             {filteredEvents.length > 0 ? (
               filteredEvents.map((ev: ExecutionEvent) => (
                 <AppTableRow key={ev.id} onClick={() => setSelectedEvent(ev)}>
-                  <AppTableCell className="font-mono text-stone-400">{ev.id}</AppTableCell>
-                  <AppTableCell className="font-bold text-stone-900">{ev.type}</AppTableCell>
-                  <AppTableCell className="text-stone-600">Amelia-v4</AppTableCell>
+                  <AppTableCell className="font-mono text-stone-400 text-xs">
+                    {ev.id.substring(0, 8)}...
+                  </AppTableCell>
+                  <AppTableCell className="font-semibold text-stone-900">
+                    {ev.type}
+                  </AppTableCell>
                   <AppTableCell>
                     <AppBadge variant={getStatusVariant(ev.status)}>{ev.status}</AppBadge>
                   </AppTableCell>
-                  <AppTableCell className="text-xs font-mono text-stone-500">
-                    {ev.verdict || 'N/A'}
+                  <AppTableCell className="text-stone-400 font-mono text-xs">
+                    {ev.started || '—'}
                   </AppTableCell>
-                  <AppTableCell className="text-stone-400 font-mono text-[11px]">
-                    {ev.time}
+                  <AppTableCell className="text-stone-400 font-mono text-xs">
+                    {ev.stopped || '—'}
                   </AppTableCell>
-                  <AppTableCell className="text-stone-500 text-xs">
-                    {ev.duration || '-'}
+                  <AppTableCell className="text-stone-500 text-xs font-mono">
+                    {ev.duration || '—'}
                   </AppTableCell>
-                  <AppTableCell className="text-stone-500 font-mono text-xs">
-                    {((ev.id.length % 5) + 0.5).toFixed(1)}
+                  <AppTableCell className="text-xs font-mono">
+                    {ev.verdict ? (
+                      <AppBadge variant={ev.verdict === 'PASSED' ? 'success' : 'warning'}>
+                        {ev.verdict}
+                      </AppBadge>
+                    ) : '—'}
                   </AppTableCell>
-                  <AppTableCell className="text-stone-500 text-xs">{ev.risk || 'Low'}</AppTableCell>
+                  <AppTableCell className="text-center">
+                    {ev.escalation ? '🚨' : '—'}
+                  </AppTableCell>
+                  <AppTableCell className="text-stone-500 font-mono text-xs text-right">
+                    {ev.value_captured ? `€${ev.value_captured.toFixed(2)}` : '—'}
+                  </AppTableCell>
+                  <AppTableCell className="text-stone-500 text-xs text-center">
+                    {ev.messages_sent || 0}
+                  </AppTableCell>
                 </AppTableRow>
               ))
             ) : (
               <AppTableRow>
-                <AppTableCell colSpan={9} className="py-20 text-center">
+                <AppTableCell colSpan={10} className="py-20 text-center">
                   <AppEmptyState
                     title="Stream Idle"
                     description="No recording events detected. Your execution audit trail will appear here once the system is active."

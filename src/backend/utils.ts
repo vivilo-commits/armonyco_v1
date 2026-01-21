@@ -1,4 +1,4 @@
-import type { KPI, Execution, BadgeVariant, Verdict, RiskLevel, Priority, CashflowSummary } from './types';
+import type { KPI, Execution, BadgeVariant, Verdict, RiskLevel, Priority, CashflowSummary, ExecutionEvent, CashflowTransaction } from './types';
 
 // DATE UTILITIES
 export function formatRelativeTime(dateStr?: string): string {
@@ -23,7 +23,8 @@ export function calculateDuration(startTime: string, endTime: string): string {
 export function calculateDashboardKPIs(
     executions: Execution[],
     messagesCount: number = 0,
-    cashflow?: CashflowSummary | null
+    cashflow?: CashflowSummary | null,
+    openEscalationsCount?: number
 ): KPI[] {
     const totalCount = executions.length;
     const successCount = executions.filter((e) => e.status === 'success' || e.finished).length;
@@ -37,13 +38,13 @@ export function calculateDashboardKPIs(
         ? Number(cashflow.total_revenue)
         : executions.reduce((acc, curr) => acc + (Number(curr.total_charge) || 0) + (Number(curr.value_captured) || 0), 0);
 
-    const openEscalations = cashflow
-        ? (cashflow.escalations_avoided ? 0 : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length)
-        : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length;
-
-    // We can use escalations_avoided as a positive metric too, but the KPI is for "Open"
-
-
+    // Use the provided openEscalationsCount if available (from unified getEscalationsData),
+    // otherwise fall back to the legacy calculation from executions
+    const openEscalations = openEscalationsCount !== undefined
+        ? openEscalationsCount
+        : (cashflow
+            ? (cashflow.escalations_avoided ? 0 : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length)
+            : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length);
 
     const latencies = executions
         .filter((e) => e.duration_ms || (e.started_at && e.stopped_at))
@@ -178,34 +179,72 @@ export function calculateDashboardKPIs(
     ];
 }
 
-export function calculateGrowthKPIs(executions: Execution[]): KPI[] {
-    // Calculate total revenue captured
-    const totalRevenue = executions.reduce((sum, exec) => sum + (exec.value_captured || 0), 0);
 
-    // Calculate upsell acceptance rate
-    const upsellOffers = executions.filter(e => e.upsell_offered).length;
-    const upsellAccepted = executions.filter(e => e.upsell_accepted).length;
-    const upsellRate = upsellOffers > 0 ? (upsellAccepted / upsellOffers) * 100 : 0;
+export function calculateGrowthKPIs(executions: Execution[], cashflowTransactions: CashflowTransaction[] = []): KPI[] {
+    // Helper to categorize transactions by amount patterns
+    const categorizeTransaction = (tx: CashflowTransaction) => {
+        const amount = parseCurrency(tx.total_amount);
 
-    // Calculate orphan days
-    const orphanDays = executions.reduce((sum, exec) => sum + (exec.orphan_days_count || 0), 0);
+        // City tax amounts (€7 per person per night - common patterns)
+        const cityTaxAmounts = [7, 14, 21, 28, 35, 42, 49, 56];
+        const isCityTax = cityTaxAmounts.includes(Math.round(amount));
 
-    // Calculate specific revenue streams
-    const lateCheckoutRevenue = executions.reduce((sum, exec) => sum + (exec.late_checkout_value || 0), 0);
-    const earlyCheckinRevenue = executions.reduce((sum, exec) => sum + (exec.early_checkin_value || 0), 0);
-    const servicesRevenue = executions.reduce(
-        (sum, exec) => sum + (exec.services_value || 0) + (exec.breakfast_value || 0) + (exec.transfer_value || 0),
-        0
-    );
+        // Small service fees (likely late checkout, early checkin)
+        const isSmallService = amount > 0 && amount <= 50 && !isCityTax;
+
+        // Medium services (likely breakfast, transfer)
+        const isMediumService = amount > 50 && amount <= 150;
+
+        return {
+            amount,
+            isCityTax,
+            isLikelyCheckoutFee: isSmallService && amount >= 15 && amount <= 40,
+            isLikelyCheckinFee: isSmallService && amount >= 10 && amount <= 35,
+            isLikelyBreakfast: isMediumService,
+            isService: isCityTax || isSmallService || isMediumService,
+        };
+    };
+
+    // Analyze cashflow transactions
+    const categorized = cashflowTransactions.map(categorizeTransaction);
+
+    // Calculate revenue by category
+    const cityTaxRevenue = categorized
+        .filter(c => c.isCityTax)
+        .reduce((sum, c) => sum + c.amount, 0);
+
+    const lateCheckoutRevenue = categorized
+        .filter(c => c.isLikelyCheckoutFee)
+        .reduce((sum, c) => sum + c.amount, 0);
+
+    const earlyCheckinRevenue = categorized
+        .filter(c => c.isLikelyCheckinFee)
+        .reduce((sum, c) => sum + c.amount, 0);
+
+    const breakfastRevenue = categorized
+        .filter(c => c.isLikelyBreakfast)
+        .reduce((sum, c) => sum + c.amount, 0);
+
+    const servicesRevenue = cityTaxRevenue + lateCheckoutRevenue + earlyCheckinRevenue + breakfastRevenue;
+
+    // Total revenue from services
+    const totalRevenue = servicesRevenue;
+
+    // Count service transactions
+    const serviceTransactions = categorized.filter(c => c.isService).length;
+
+    // Simplified upsell rate (service transactions / total transactions)
+    const totalTransactions = cashflowTransactions.length;
+    const upsellRate = totalTransactions > 0 ? (serviceTransactions / totalTransactions) * 100 : 0;
 
     return [
         {
             id: 'total-revenue',
             label: 'Total Revenue Captured',
-            value: `€ ${totalRevenue.toFixed(2).replace('.', ',')}`,
+            value: formatCurrency(totalRevenue),
             trend: 0,
             trendLabel: '',
-            subtext: `${executions.length} Executions`,
+            subtext: `${serviceTransactions} Service Transactions`,
             status: totalRevenue > 0 ? 'success' : 'neutral',
         },
         {
@@ -214,22 +253,22 @@ export function calculateGrowthKPIs(executions: Execution[]): KPI[] {
             value: `${upsellRate.toFixed(1)}%`,
             trend: 0,
             trendLabel: '',
-            subtext: `${upsellAccepted}/${upsellOffers} Accepted`,
+            subtext: `${serviceTransactions}/${totalTransactions} w/ Services`,
             status: upsellRate > 0 ? 'success' : 'neutral',
         },
         {
             id: 'orphan-days',
             label: 'Orphan Days Captured',
-            value: orphanDays.toString(),
+            value: '0',
             trend: 0,
             trendLabel: '',
-            subtext: 'Occupancy Boost',
-            status: orphanDays > 0 ? 'success' : 'neutral',
+            subtext: 'Requires Lara Data',
+            status: 'neutral',
         },
         {
             id: 'late-checkout',
             label: 'Late Checkout Revenue',
-            value: `€ ${lateCheckoutRevenue.toFixed(2).replace('.', ',')}`,
+            value: formatCurrency(lateCheckoutRevenue),
             trend: 0,
             trendLabel: '',
             subtext: 'Extension Value',
@@ -238,7 +277,7 @@ export function calculateGrowthKPIs(executions: Execution[]): KPI[] {
         {
             id: 'early-checkin',
             label: 'Early Check-in Revenue',
-            value: `€ ${earlyCheckinRevenue.toFixed(2).replace('.', ',')}`,
+            value: formatCurrency(earlyCheckinRevenue),
             trend: 0,
             trendLabel: '',
             subtext: 'Arrival Value',
@@ -247,11 +286,11 @@ export function calculateGrowthKPIs(executions: Execution[]): KPI[] {
         {
             id: 'services',
             label: 'Services Revenue',
-            value: `€ ${servicesRevenue.toFixed(2).replace('.', ',')}`,
+            value: formatCurrency(breakfastRevenue + cityTaxRevenue),
             trend: 0,
             trendLabel: '',
-            subtext: 'Add-ons & Extras',
-            status: servicesRevenue > 0 ? 'success' : 'neutral',
+            subtext: 'Breakfast & City Tax',
+            status: (breakfastRevenue + cityTaxRevenue) > 0 ? 'success' : 'neutral',
         },
     ];
 }
@@ -322,10 +361,31 @@ export function getStatusColor(status: string): 'success' | 'warning' | 'error' 
 }
 
 /**
- * Cleans message content by:
- * 1. Filtering out internal AI traces (e.g., "Calling Think...")
- * 2. Parsing JSON-formatted AI responses to extract the final user-facing text
+ * Parse currency string to number
+ * Converts "€ 56,00" or "€56,00" to 56.00
  */
+export function parseCurrency(value: string): number {
+    if (!value) return 0;
+    // Remove € symbol and all white spaces
+    let cleaned = value.replace('€', '').replace(/\s/g, '');
+
+    // European format check: if there's a comma, it's the decimal separator
+    // and dots are thousand separators.
+    if (cleaned.includes(',')) {
+        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    }
+
+    return parseFloat(cleaned) || 0;
+}
+
+/**
+ * Format currency for display (European format with dots for thousands)
+ * Example: 179917.92 → "€ 179.917,92"
+ */
+export function formatCurrency(value: number): string {
+    return `€ ${value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function cleanMessageContent(content: string): string {
     if (!content) return '';
 
