@@ -1,4 +1,4 @@
-import type { KPI, Execution, BadgeVariant, Verdict, RiskLevel, Priority, CashflowSummary, ExecutionEvent, CashflowTransaction } from './types';
+import type { KPI, Execution, BadgeVariant, Verdict, RiskLevel, Priority, CashflowSummary, CashflowTransaction } from './types';
 
 // DATE UTILITIES
 export function formatRelativeTime(dateStr?: string): string {
@@ -47,9 +47,8 @@ export function calculateDashboardKPIs(
             : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length);
 
     const latencies = executions
-        .filter((e) => e.duration_ms || (e.started_at && e.stopped_at))
+        .filter((e) => e.started_at && e.stopped_at)
         .map((e) => {
-            if (e.duration_ms) return e.duration_ms;
             return new Date(e.stopped_at!).getTime() - new Date(e.started_at!).getTime();
         })
         .sort((a, b) => a - b);
@@ -180,7 +179,7 @@ export function calculateDashboardKPIs(
 }
 
 
-export function calculateGrowthKPIs(executions: Execution[], cashflowTransactions: CashflowTransaction[] = []): KPI[] {
+export function calculateGrowthKPIs(_executions: Execution[], cashflowTransactions: CashflowTransaction[] = []): KPI[] {
     // Helper to categorize transactions by amount patterns
     const categorizeTransaction = (tx: CashflowTransaction) => {
         const amount = parseCurrency(tx.total_amount);
