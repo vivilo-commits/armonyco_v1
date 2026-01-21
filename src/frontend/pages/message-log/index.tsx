@@ -77,11 +77,9 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
       );
     }
 
-    // Sort by latest message timestamp (descending)
+    // Sort by latest message ISO string (most recent first)
     return [...filtered].sort((a, b) => {
-      const lastA = a.messages[a.messages.length - 1]?.time || '0';
-      const lastB = b.messages[b.messages.length - 1]?.time || '0';
-      return new Date(lastB).getTime() - new Date(lastA).getTime();
+      return new Date(b.latestMessageAt).getTime() - new Date(a.latestMessageAt).getTime();
     });
   }, [data?.conversations, localSearch, searchTerm]);
 

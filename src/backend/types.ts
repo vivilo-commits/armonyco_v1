@@ -322,6 +322,7 @@ export interface Conversation {
   subProperty?: string;
   messages: Message[];
   crm: CRMData;
+  latestMessageAt: string; // ISO timestamp for sorting
 }
 
 export interface KPI {

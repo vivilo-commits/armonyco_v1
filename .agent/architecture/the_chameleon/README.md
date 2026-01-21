@@ -29,6 +29,7 @@ To operate this project with maximum efficiency, you must understand three core 
 - **Naming Convention**: Subscription plans must ALWAYS be named **Starter, Pro, Elite, VIP** in all systems (DB, Frontend, Backend, Stripe).
 - **Presentation Engineering**: Use rigid 16:9 containers (`100vw` / `56.25vw`) for PDF decks. Always check "Background Graphics" in print settings to preserve gold gradients and dark themes.
 - **Logo Protocol**: Use `3.png` for major hero sections and `5.png` (icon-only) for slide headers to maintain a clean, institutional hierarchy.
+- **Security & Governance**: Always implement Row-Level Security (RLS) using the `organization_members` subquery pattern for multi-tenant isolation. Enable "Leaked Password Protection" in Supabase Auth settings for all production deployments.
 
 ---
 

@@ -9,10 +9,9 @@ import type {
   AppStatus,
   Verdict,
   RiskLevel,
-  CashflowSummary,
-  KPI
+  CashflowSummary
 } from './types';
-import { calculateDashboardKPIs, calculateGrowthKPIs } from './utils';
+import { calculateDashboardKPIs } from './utils';
 import { supabase } from '@/database/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -404,15 +403,16 @@ class ApiService {
   // --- Message Log ---
 
   async getConversationsData() {
-    // Use Supabase JS client for reliable data fetching
+    // Get the LATEST 1000 messages (ordered by ID desc to ensure we get newest)
     const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
-      order: { column: 'id', ascending: true },
-      limit: 500
+      order: { column: 'id', ascending: false },
+      limit: 1000
     });
 
-    const safeHistory = history || [];
+    // Reverse history to process chronologically for grouping
+    const safeHistory = (history || []).reverse();
 
-    // Filter out tool messages and AI internal traces (Calling Think, Calling Guidelines, etc.)
+    // Filter out tool messages and AI internal traces
     const userMessages = safeHistory.filter(msg => {
       if (msg.message.type === 'tool') return false;
       if (msg.message.type === 'ai' && msg.message.content.startsWith('Calling ')) return false;
@@ -424,16 +424,22 @@ class ApiService {
 
     userMessages.forEach(msg => {
       const sessionId = msg.session_id;
-      const msgTimestamp = msg.id; // Using ID as proxy for timestamp (auto-incrementing)
-      const messageTime = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const msgTimestamp = msg.id;
+      const msgDate = new Date(msg.created_at);
+      const isToday = msgDate.toDateString() === new Date().toDateString();
+
+      // Formatting: Show date if not today
+      const messageTime = isToday
+        ? msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : msgDate.toLocaleDateString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
       if (!conversationsMap.has(sessionId)) {
         conversationsMap.set(sessionId, {
           id: sessionId,
-          name: sessionId, // Use full phone number
-          initials: sessionId.slice(0, 2), // First 2 digits
+          name: sessionId,
+          initials: sessionId.slice(0, 2),
           platform: 'whatsapp',
-          time: messageTime, // Use first message time
+          time: messageTime,
           dates: 'Active',
           status: 'Active',
           messages: [],
@@ -447,16 +453,18 @@ class ApiService {
             fields: [],
             toPay: '€ 0,00'
           },
-          latestTimestamp: msgTimestamp
+          latestTimestamp: msgTimestamp,
+          latestMessageAt: msg.created_at
         });
       }
 
       const conv = conversationsMap.get(sessionId)!;
 
-      // Update latest timestamp and conversation time
+      // Update latest metadata
       if (msgTimestamp > conv.latestTimestamp) {
         conv.latestTimestamp = msgTimestamp;
-        conv.time = messageTime; // Update to latest message time
+        conv.time = messageTime;
+        conv.latestMessageAt = msg.created_at;
       }
 
       conv.messages.push({
@@ -464,14 +472,14 @@ class ApiService {
         sender: msg.message.type === 'human' ? 'guest' : 'agent',
         type: 'text',
         text: msg.message.content || '',
-        time: messageTime // Use actual message timestamp
+        time: messageTime
       });
     });
 
-    // Convert to array and sort by latest message (most recent first)
+    // Convert to array and sort by latest message ISO string (most recent first)
     const conversations = Array.from(conversationsMap.values())
-      .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
-      .map(({ latestTimestamp, ...conv }) => conv); // Remove latestTimestamp from final object
+      .sort((a, b) => new Date(b.latestMessageAt).getTime() - new Date(a.latestMessageAt).getTime())
+      .map(({ latestTimestamp, ...conv }) => conv);
 
     return {
       conversations,
@@ -505,65 +513,6 @@ class ApiService {
       order: { column: 'period_end', ascending: false }
     });
     return data?.[0] || null;
-  }
-
-  private calculateGrowthKPIsFromCashflow(cashflow: CashflowSummary): KPI[] {
-    return [
-      {
-        id: 'total-revenue',
-        label: 'Total Revenue Captured',
-        value: `€ ${Number(cashflow.total_revenue).toFixed(2).replace('.', ',')}`,
-        trend: 0,
-        trendLabel: '',
-        subtext: `${cashflow.executions_count} Executions`,
-        status: Number(cashflow.total_revenue) > 0 ? 'success' : 'neutral',
-      },
-      {
-        id: 'upsell-rate',
-        label: 'Upsell Acceptance Rate',
-        value: `${Number(cashflow.upsell_acceptance_rate).toFixed(1)}%`,
-        trend: 0,
-        trendLabel: '',
-        subtext: `${cashflow.upsell_accepted_count}/${cashflow.upsell_offers_count} Accepted`,
-        status: Number(cashflow.upsell_acceptance_rate) > 0 ? 'success' : 'neutral',
-      },
-      {
-        id: 'orphan-days',
-        label: 'Orphan Days Captured',
-        value: cashflow.orphan_days_captured.toString(),
-        trend: 0,
-        trendLabel: '',
-        subtext: 'Occupancy Boost',
-        status: cashflow.orphan_days_captured > 0 ? 'success' : 'neutral',
-      },
-      {
-        id: 'late-checkout',
-        label: 'Late Checkout Revenue',
-        value: `€ ${Number(cashflow.late_checkout_revenue).toFixed(2).replace('.', ',')}`,
-        trend: 0,
-        trendLabel: '',
-        subtext: 'Extension Value',
-        status: Number(cashflow.late_checkout_revenue) > 0 ? 'success' : 'neutral',
-      },
-      {
-        id: 'early-checkin',
-        label: 'Early Check-in Revenue',
-        value: `€ ${Number(cashflow.early_checkin_revenue).toFixed(2).replace('.', ',')}`,
-        trend: 0,
-        trendLabel: '',
-        subtext: 'Arrival Value',
-        status: Number(cashflow.early_checkin_revenue) > 0 ? 'success' : 'neutral',
-      },
-      {
-        id: 'services',
-        label: 'Services Revenue',
-        value: `€ ${Number(cashflow.services_revenue).toFixed(2).replace('.', ',')}`,
-        trend: 0,
-        trendLabel: '',
-        subtext: 'Add-ons & Extras',
-        status: Number(cashflow.services_revenue) > 0 ? 'success' : 'neutral',
-      },
-    ];
   }
 
   /**
