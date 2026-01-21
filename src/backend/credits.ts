@@ -6,6 +6,82 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
+ * Armo Credits Conversion System
+ * 
+ * CRITICAL RULE: NEVER expose tokens or euros to users
+ * Always show Armo Credits in the UI
+ * 
+ * Conversion Rates:
+ * - 1 Armo Credit = 1,000 OpenAI tokens
+ * - 1 Armo Credit = €0.01
+ */
+
+export const CREDITS_CONFIG = {
+    // Conversion rates (BACKEND ONLY - never expose to frontend)
+    TOKENS_PER_CREDIT: 1000,
+    EUROS_PER_CREDIT: 0.01,
+
+    // Free tier
+    FREE_CREDITS_ON_SIGNUP: 1000, // €10 worth
+
+    // Pricing tiers (in Armo Credits)
+    TIERS: {
+        STARTER: {
+            name: 'Starter',
+            credits: 25000,
+            price_euros: 249,
+            price_cents: 24900,
+        },
+        PRO: {
+            name: 'Pro',
+            credits: 100000,
+            price_euros: 499,
+            price_cents: 49900,
+        },
+        ELITE: {
+            name: 'Elite',
+            credits: 250000,
+            price_euros: 999,
+            price_cents: 99900,
+        },
+        VIP: {
+            name: 'VIP',
+            credits: 0,
+            price_euros: 0,
+            price_cents: 0,
+        },
+    },
+} as const;
+
+/**
+ * Convert AI tokens to Armo Credits
+ */
+export function tokensToCredits(tokens: number): number {
+    return Math.ceil(tokens / CREDITS_CONFIG.TOKENS_PER_CREDIT);
+}
+
+/**
+ * Convert euros to Armo Credits
+ */
+export function eurosToCredits(euros: number): number {
+    return Math.round(euros / CREDITS_CONFIG.EUROS_PER_CREDIT);
+}
+
+/**
+ * Convert Armo Credits to euros
+ */
+export function creditsToEuros(credits: number): number {
+    return credits * CREDITS_CONFIG.EUROS_PER_CREDIT;
+}
+
+/**
+ * Format credits for display
+ */
+export function formatCredits(credits: number): string {
+    return `${credits.toLocaleString('en-US')} Credits`;
+}
+
+/**
  * Adds credits to an organization's balance and logs the transaction.
  * Standardized for use in Stripe webhooks and manual adjustments.
  */

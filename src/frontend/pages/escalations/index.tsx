@@ -108,10 +108,15 @@ export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
                         {item.phone_clean}
                       </span>
                       <AppBadge
-                        variant={item.status === 'RESOLVED' ? 'success' : item.classification === 'Critical' ? 'error' : 'warning'}
+                        variant={item.status === 'RESOLVED' ? 'success' : (item.classification === 'Critical' || item.classification === 'M3') ? 'error' : 'warning'}
                       >
                         {item.classification || 'M1'}
                       </AppBadge>
+                      {item.metadata?.risk_type && (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-stone-400 border border-stone-200 px-1.5 py-0.5 rounded-md">
+                          {item.metadata.risk_type}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-[10px] text-stone-400 font-mono">
                       <span>ID: {item.id.substring(0, 8)}...</span>

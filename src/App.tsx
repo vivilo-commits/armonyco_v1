@@ -43,8 +43,33 @@ import {
 } from './frontend/components/SubscriptionGate';
 
 const AppContent: React.FC = () => {
+  // Navigation persistence mapping
+  const hashToView = React.useMemo(() => ({
+    'dashboard': View.DASHBOARD,
+    'growth': View.GROWTH,
+    'escalations': View.ESCALATIONS,
+    'message-log': View.MESSAGE_LOG,
+    'controls': View.CONTROLS,
+    'settings': View.SETTINGS,
+    'operational-protocols': View.OPERATIONAL_PROTOCOLS,
+  } as Record<string, View>), []);
+
+  const viewToHash = React.useMemo(() => {
+    const map: Record<string, string> = {};
+    Object.entries(hashToView).forEach(([hash, view]) => {
+      map[view] = hash;
+    });
+    return map;
+  }, [hashToView]);
+
+  const getInitialView = (): View => {
+    const hash = window.location.hash.replace('#', '');
+    if (user && hashToView[hash]) return hashToView[hash];
+    return user ? View.DASHBOARD : View.LANDING;
+  };
+
   const { user, loading: authLoading, signOut, organizationId, sessionExpired } = useAuth();
-  const [currentView, setCurrentView] = useState<View>(View.LANDING);
+  const [currentView, setCurrentView] = useState<View>(getInitialView);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [escalationCount, setEscalationCount] = useState(0);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -97,11 +122,11 @@ const AppContent: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
-  // Fetch escalation count
+  // Fetch escalation count (OPEN only for notification badge)
   React.useEffect(() => {
     const fetchCount = async () => {
       try {
-        const data = await api.getEscalationsData();
+        const data = await api.getEscalationsData('OPEN');
         setEscalationCount(data?.length || 0);
       } catch (e) {
         console.error('Failed to fetch escalation count', e);
@@ -126,12 +151,42 @@ const AppContent: React.FC = () => {
     }
   }, [user]);
 
-  // Auto-switch to dashboard if logged in
+  // Sync state to hash
+  React.useEffect(() => {
+    if (user && currentView !== View.LANDING) {
+      const hash = viewToHash[currentView];
+      if (hash && window.location.hash !== `#${hash}`) {
+        window.history.pushState(null, '', `#${hash}`);
+      }
+    } else if (!user && currentView === View.LANDING) {
+      if (window.location.hash) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+  }, [currentView, user, viewToHash]);
+
+  // Sync hash to state (handle back/forward browser buttons)
+  React.useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '');
+      const view = hashToView[hash];
+      if (user && view && view !== currentView) {
+        setCurrentView(view);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [currentView, user, hashToView]);
+
+  // Auto-switch to dashboard or hashed view if logged in
   React.useEffect(() => {
     if (user && currentView === View.LANDING && (!showLogin && !showSignUp)) {
-      setCurrentView(View.DASHBOARD);
+      const hash = window.location.hash.replace('#', '');
+      const hashedView = hashToView[hash];
+      setCurrentView(hashedView || View.DASHBOARD);
     }
-  }, [user, currentView, showLogin, showSignUp]);
+  }, [user, currentView, showLogin, showSignUp, hashToView]);
 
   // Simplified loading - only show during initial auth OR logout
   if (authLoading) {

@@ -15,10 +15,11 @@ The 5 Core Constructs of DecisionOS™ must have distinct, meaningful visual ide
 | Armonyco Intelligence Matrix™ | `AIM` | `Zap` | Instant multi-agent intelligence |
 | Armonyco Governance Scorecard™ | `AGS` | `BarChart3` | Performance signals and ROI |
 
-### Visual Identity Pattern
-- **Brand Watermark**: Use `ASSETS.logos.icon` (the brand "A") as a subtle background element or pulse animation within core identity containers.
-- **Color Standard**: All primary indicators must use the Armonyco Gold `#f5d47c` with explicit hex overrides to bypass CSS inheritance issues.
-- **Glassmorphism**: Use `bg-stone-900/80` with `backdrop-blur-md` and `border-stone-500/60` for cards.
+- **Brand Watermark**: Use `ASSETS.logos.icon` (the brand "A") as a subtle background element or pulse animation.
+- **Color Standard**: Primary Gold `#f5d47c`, Background `stone-900`. Use explicit hex overrides.
+- **Glassmorphism**: `bg-stone-900/80` with `backdrop-blur-md` and `border-stone-500/60`.
+- **Navigation Persistence**: URL Hash mapping in `App.tsx` (e.g., `#escalations` -> `View.ESCALATIONS`). Bidirectional sync handles refresh and browser buttons.
+- **Data Fetching**: Always use **Supabase JS Client** (`.from().select()`). Never use raw `fetch()` for authenticated data.
 
 ### Premium Transition Logic (Hover)
 Hover effects must feel reactive and high-end:
@@ -32,7 +33,19 @@ Hover effects must feel reactive and high-end:
 To ensure real-time accuracy in message logs:
 - **Backend**: Always fetch messages using `id` DESC to capture the newest entries. Expose a `latestMessageAt` ISO timestamp for reliable frontend sorting.
 - **Timestamps**: Show the date if the message is from a previous day (`DD/MM HH:mm`). Show only time (`HH:mm`) for today's messages.
-- **Frontend**: Never sort by formatted time strings. Always use secondary ISO timestamps or trust the API's sorted response.
+### AI Personas & Guardrails (The Amelia Protocol)
+To maintain hospitality-grade excellence, all agents (Amelia, Lara, James, Elon, etc.) must follow these rigid protocols:
+- **Safety Hierarchy**: **Safety** → **Truth** → **Clarity** → **Tone**.
+- **Rule of Truth**: Never answer a guest without explicit tool validation in the current turn. If data is missing, offer human escalation immediately.
+- **Reasoning Space**: Internal thought blocks are mandatory before composing any reply to summarize requests and plan tool usage.
+- **Escalation Scoring**: 
+    - `0.7+` = FLAG/TRIGGER (Failed Guardrail).
+    - `1.0` = Certain escalation.
+    - `0.6` = Ambiguous (Requires human review).
+
+### Message Cleaning (UX)
+- **Shared Utility**: Use `cleanMessageContent` from `utils.ts` for all displays.
+- **Filtering**: Hide tool messages, internal JSON reasoning, and "Calling..." traces. Only show `human` and `ai` roles.
 
 ## [Security & Governance]
 
@@ -51,7 +64,45 @@ USING (
 - **Minimum Password Length**: 12 characters recommended for institutional accounts.
 - **JWT Awareness**: Use `supabase.auth.getSession()` to ensure the SDK maintains the current state across transitions.
 
-## [Implementation Rules]
-1. **Zero-Mistake Repetition**: Always check this document before modifying core visual sections.
-2. **Explicit Styling**: When using Lucide icons, apply `color="#f5d47c"`, `strokeWidth={2.5}`, and optional `fill` props directly to the component.
-3. **Institutional Tone**: Avoid generic red/blue/green colors. Use the Stone and Gold palette for all primary communications.
+## [Backend Architecture]
+
+### API & Data Fetching
+- **Standard Pattern**: `async supabaseFetch<T>(table: string, ...)` using the Supabase client.
+- **Authentication**: Rely on the SDK's automatic session handling. Never use raw `fetch()` for authenticated endpoints.
+- **RLS Enforcement**: Trust Row-Level Security policies for multi-tenant access control.
+- **Error Handling**: Follow the pattern in `docs/api/hotels.ts` (historical reference) for consistent error propagation.
+
+### Message Processing
+- **Filtering Rules**: 
+  - Hide `type: 'tool'` (internal orchestration).
+  - Hide AI traces starting with "Calling " or internal JSON thinking blocks.
+  - Only present `type: 'human'` and `type: 'ai'` to the user.
+- **Timestamps**: Strictly use `created_at` from the database. Do not generate timestamps on the frontend for historical messages.
+
+### Multi-Tenancy (RLS)
+Every table must include the following RLS pattern for selection:
+```sql
+USING (
+  organization_id IS NULL OR 
+  organization_id IN (
+    SELECT organization_id FROM organization_members 
+    WHERE user_id = auth.uid()
+  )
+);
+```
+*Note: Allow `NULL` `organization_id` only for historical data migration if explicitly required.*
+
+## [Maintenance & Structure]
+
+### Project Integrity
+To maintain an ultra-premium, maintainable codebase:
+- **Zero Redundancy**: If a core logic file (e.g., `credits.ts`) already exists, never create a parallel system (e.g., `credits-system.ts`).
+- **Build Isolation**: Build artifacts must only exist in the root `/dist`. No nested `dist` folders are allowed.
+- **Single Source of Truth**: All backend services should reside in `/src/backend`. Avoid fragmentation into multiple parallel `api/` folders.
+- **No Placeholders**: Interaction-ready code is prioritized over "Coming Soon" banners.
+
+### File Cleanup
+Regularly remove:
+- `dist/` and `node_modules/` from nested directories if created by mistake.
+- Unused `.DS_Store` files.
+- Duplicate types or utility functions that have been consolidated into `utils.ts` or `types.ts`.

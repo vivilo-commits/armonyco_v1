@@ -45,6 +45,6 @@
   ],
   "exclude": [
     "node_modules",
-    "src/dist"
+    "src/frontend/dist"
   ]
 }

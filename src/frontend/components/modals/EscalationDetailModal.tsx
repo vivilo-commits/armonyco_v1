@@ -9,6 +9,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { api } from '@/backend/api';
+import { cleanMessageContent } from '@/backend/utils';
 import { Escalation, WhatsAppHistory } from '@/backend/types';
 
 interface EscalationDetailModalProps {
@@ -59,7 +60,16 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
     if (!escalation) return;
     setIsSubmitting(true);
     try {
-      await api.resolveEscalation(escalation.id, formData.notes, formData.classification);
+      // Get user context - we'll use supabase auth to get current user
+      const { data: { user } } = await import('@/database/supabase').then(m => m.supabase.auth.getUser());
+
+      await api.resolveEscalation(
+        escalation.id,
+        formData.notes,
+        formData.classification,
+        user?.id,
+        user?.user_metadata?.full_name || user?.email
+      );
       onResolved?.();
       onClose();
     } catch (e) {
@@ -107,7 +117,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
             </div>
 
             {/* Context Details */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <AppCard variant="light" className="p-5">
                 <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold mb-2">
                   Source Trigger
@@ -117,15 +127,46 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                   {escalation.metadata?.workflow || 'System'}
                 </div>
               </AppCard>
+
+              <AppCard variant="light" className="p-5">
+                <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold mb-2">
+                  Risk Score
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm font-bold text-stone-900">
+                    {escalation.metadata?.risk_type || 'Standard'}
+                  </div>
+                  {escalation.metadata?.score !== undefined && (
+                    <AppBadge variant={escalation.metadata.score > 0.8 ? 'error' : 'warning'}>
+                      {Math.round(escalation.metadata.score * 100)}%
+                    </AppBadge>
+                  )}
+                </div>
+              </AppCard>
+
               <AppCard variant="light" className="p-5">
                 <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold mb-2">
                   Escalation Reason
                 </div>
-                <div className="text-xs font-bold text-stone-700 truncate">
+                <div className="text-xs font-bold text-stone-700 truncate" title={escalation.metadata?.reason}>
                   {escalation.metadata?.reason || 'Human interaction requested'}
                 </div>
               </AppCard>
             </div>
+
+            {/* Trigger Message - The message that caused the escalation */}
+            {escalation.metadata?.trigger_message && (
+              <AppCard variant="light" className="p-5">
+                <div className="text-[10px] text-stone-400 uppercase tracking-widest font-bold mb-3">
+                  Triggering Message
+                </div>
+                <div className="bg-stone-50 border border-stone-100 rounded-xl p-4">
+                  <p className="text-sm text-stone-700 leading-relaxed">
+                    "{escalation.metadata.trigger_message}"
+                  </p>
+                </div>
+              </AppCard>
+            )}
 
             {/* WhatsApp Context */}
             <div className="space-y-4">
@@ -146,6 +187,11 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                   </div>
                 ) : (
                   history.map((h) => {
+                    const cleanedText = cleanMessageContent(h.message?.content || '');
+
+                    // Filter out internal traces or empty AI responses
+                    if (!cleanedText && h.message?.type === 'ai') return null;
+
                     const isInbound = h.message?.type === 'human';
                     return (
                       <div
@@ -160,7 +206,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                               : 'bg-stone-900 text-white shadow-md'}
                           `}
                         >
-                          {h.message?.content || 'Empty message'}
+                          {cleanedText || 'Empty message'}
                         </div>
                         <span className="text-[9px] text-stone-400 mt-1 font-mono">
                           {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

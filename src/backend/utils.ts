@@ -320,3 +320,34 @@ export function getStatusColor(status: string): 'success' | 'warning' | 'error' 
     if (['failed', 'error', 'canceled', 'blocked', 'critical'].includes(s)) return 'error';
     return 'info';
 }
+
+/**
+ * Cleans message content by:
+ * 1. Filtering out internal AI traces (e.g., "Calling Think...")
+ * 2. Parsing JSON-formatted AI responses to extract the final user-facing text
+ */
+export function cleanMessageContent(content: string): string {
+    if (!content) return '';
+
+    // 1. Filter out internal AI process logs
+    if (content.startsWith('Calling Think with input:')) return '';
+    if (content.startsWith('Calling ') && content.includes(' with input:')) return '';
+
+    // 2. Handle JSON-formatted responses from LLMs
+    // Some n8n nodes or AI agents return raw JSON strings
+    if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+        try {
+            const parsed = JSON.parse(content);
+            // Case 1: n8n structured response { "response": "..." }
+            if (parsed.response) return parsed.response;
+            // Case 2: Array-wrapped response [{ "response": "..." }]
+            if (Array.isArray(parsed) && parsed[0]?.response) return parsed[0].response;
+            // Case 3: Just return the object as string if no clear 'response' key
+            return typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
+        } catch (e) {
+            // Not valid JSON or parsing failed, fall back to original content
+        }
+    }
+
+    return content;
+}

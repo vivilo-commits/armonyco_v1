@@ -12,6 +12,8 @@ import {
   Crown,
   Mail,
   MapPin,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 
 import {
@@ -33,6 +35,18 @@ import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '@/database/supabase';
 
 type SettingsTab = 'IDENTITY' | 'ORGANIZATION' | 'SYSTEM_ACTIVATION' | 'SUBSCRIPTION';
+
+interface TeamMember {
+  id: string;
+  user_id: string;
+  role: string;
+  created_at: string;
+  profiles: {
+    full_name: string | null;
+    email: string | null;
+    phone: string | null;
+  };
+}
 
 export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('IDENTITY');
@@ -69,6 +83,13 @@ export const Settings: React.FC = () => {
   const [autoTopupThreshold, setAutoTopupThreshold] = useState(10);
   const [autoTopupAmount, setAutoTopupAmount] = useState(50);
 
+  // Team members
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('viewer');
+  const [inviting, setInviting] = useState(false);
+
   useEffect(() => {
     if (entitlements) {
       setAutoTopupEnabled(!!entitlements.auto_topup_enabled);
@@ -94,6 +115,55 @@ export const Settings: React.FC = () => {
       setBillingCountry(organization.billing_country || 'IT');
     }
   }, [profile, organization]);
+
+  useEffect(() => {
+    if (activeTab === 'ORGANIZATION') {
+      fetchTeamMembers();
+    }
+  }, [activeTab]);
+
+  const fetchTeamMembers = async () => {
+    setLoadingTeam(true);
+    try {
+      const members = await api.getTeamMembers();
+      setTeamMembers(members as any);
+    } catch (e) {
+      console.error('Failed to fetch team members:', e);
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  const handleInvite = async () => {
+    if (!inviteEmail) return;
+    setInviting(true);
+    try {
+      await api.inviteTeamMember(inviteEmail, inviteRole);
+      setInviteEmail('');
+      await fetchTeamMembers();
+      setSaveMessage('Invitation sent!');
+    } catch (e) {
+      console.error('Invite error:', e);
+      setSaveMessage(e instanceof Error ? e.message : 'Failed to invite');
+    } finally {
+      setInviting(false);
+      setTimeout(() => setSaveMessage(''), 3000);
+    }
+  };
+
+  const handleRemoveMember = async (id: string) => {
+    if (!confirm('Are you sure you want to remove this member?')) return;
+    try {
+      const { error } = await supabase
+        .from('organization_members')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      await fetchTeamMembers();
+    } catch (e) {
+      console.error('Remove error:', e);
+    }
+  };
 
   const handleSaveIdentity = async () => {
     if (!profile) return;
@@ -389,14 +459,82 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div className="p-6 bg-stone-50 rounded-2xl border border-stone-200">
-                    <h4 className="text-xs font-bold text-stone-600 uppercase tracking-widest flex items-center gap-2 mb-4">
-                      <Users size={14} /> Team Members
-                    </h4>
-                    <div className="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20 text-center">
-                      <p className="text-sm text-amber-400">
-                        Team invitation feature coming soon. You will be able to invite
-                        collaborators with Manager or Viewer roles.
-                      </p>
+                    <div className="flex items-center justify-between mb-6">
+                      <h4 className="text-xs font-bold text-stone-600 uppercase tracking-widest flex items-center gap-2">
+                        <Users size={14} /> Team Members
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        <select
+                          value={inviteRole}
+                          onChange={(e) => setInviteRole(e.target.value)}
+                          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                        >
+                          <option value="viewer">Viewer</option>
+                          <option value="manager">Manager</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <input
+                          type="email"
+                          placeholder="Colleague's email"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm w-64 focus:outline-none ring-stone-900 focus:ring-1"
+                        />
+                        <AppButton
+                          size="sm"
+                          icon={<Plus size={14} />}
+                          onClick={handleInvite}
+                          loading={inviting}
+                        >
+                          Invite
+                        </AppButton>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      {loadingTeam ? (
+                        <div className="text-center py-4 text-stone-400 animate-pulse">Loading team...</div>
+                      ) : teamMembers.length === 0 ? (
+                        <div className="bg-white p-6 rounded-xl border border-stone-100 text-center">
+                          <p className="text-sm text-stone-500 italic">No other members yet</p>
+                        </div>
+                      ) : (
+                        teamMembers.map((member) => (
+                          <div
+                            key={member.id}
+                            className="flex items-center justify-between p-4 bg-white rounded-xl border border-stone-100 hover:border-stone-200 transition-all group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-10 h-10 rounded-full bg-stone-100 flex items-center justify-center font-bold text-stone-600">
+                                {member.profiles?.full_name?.[0] || member.profiles?.email?.[0]?.toUpperCase() || '?'}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-stone-900">
+                                  {member.profiles?.full_name || 'Pending Invitation'}
+                                </p>
+                                <p className="text-xs text-stone-500">{member.profiles?.email}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <AppBadge variant={
+                                member.role === 'owner' ? 'success' :
+                                  member.role === 'admin' ? 'warning' :
+                                    member.role === 'manager' ? 'info' : 'neutral'
+                              }>
+                                {member.role.toUpperCase()}
+                              </AppBadge>
+                              {member.role !== 'owner' && (
+                                <button
+                                  onClick={() => handleRemoveMember(member.id)}
+                                  className="p-2 text-stone-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 

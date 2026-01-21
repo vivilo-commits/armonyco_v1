@@ -11,7 +11,7 @@ import type {
   RiskLevel,
   CashflowSummary
 } from './types';
-import { calculateDashboardKPIs } from './utils';
+import { calculateDashboardKPIs, cleanMessageContent } from './utils';
 import { supabase } from '@/database/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -336,23 +336,90 @@ class ApiService {
 
   // --- Escalations ---
 
-  async getEscalationsData(status?: string) {
-    const escalations = await this.supabaseFetch<Escalation[]>('escalations', {
-      eq: status ? { status } : undefined
+  async getEscalationsData(status?: string): Promise<Escalation[]> {
+    // Fetch from unified executions table where human escalation was triggered
+    const executions = await this.supabaseFetch<Execution[]>('executions', {
+      eq: {
+        human_escalation_triggered: true,
+        ...(status ? { escalation_status: status } : {})
+      },
+      order: { column: 'created_at', ascending: false }
     });
-    return escalations || [];
+
+    if (!executions) return [];
+
+    // Map Execution to Escalation interface for frontend compatibility
+    return executions.map(exec => {
+      // Calculate response time if resolved
+      let responseTimeMinutes: number | undefined;
+      if (exec.escalation_resolved_at && (exec.escalation_opened_at || exec.created_at)) {
+        const opened = new Date(exec.escalation_opened_at || exec.created_at).getTime();
+        const resolved = new Date(exec.escalation_resolved_at).getTime();
+        responseTimeMinutes = Math.round((resolved - opened) / 60000); // Convert ms to minutes
+      }
+
+      return {
+        id: String(exec.id),
+        // Prefer explicit phone, fallback to contact name or ID
+        phone_clean: exec.guest_phone || exec.whatsapp_contact_name || `Exec #${exec.execution_id.substring(0, 6)}`,
+        execution_id: exec.execution_id,
+        status: (exec.escalation_status as 'OPEN' | 'RESOLVED' | 'DISMISSED') || 'OPEN',
+        classification: exec.escalation_priority || 'M1', // Map priority to classification
+        resolution_notes: exec.escalation_resolution_notes,
+        resolved_by: exec.escalation_assigned_to,
+        resolved_at: exec.escalation_resolved_at,
+        metadata: {
+          reason: exec.human_escalation_reason,
+          workflow: exec.workflow_name,
+          risk_type: exec.risk_type,
+          score: exec.human_escalation_score,
+          response_time_minutes: responseTimeMinutes,
+          // Store the triggering message if available
+          trigger_message: exec.whatsapp_message_body || exec.kross_message_body
+        },
+        created_at: exec.escalation_opened_at || exec.created_at,
+        updated_at: exec.updated_at
+      };
+    });
   }
 
-  async getEscalationContext(_phone: string) {
+  async getEscalationContext(identifier: string) {
+    // Helper to find context. Identifier might be phone number or execution ID.
+    // We search whatsapp history primarily by matching phone numbers.
+    let phone = identifier;
+
+    // If identifier looks like an execution ID (UUID ish) or small ID, we might need to look up the execution first
+    // But typically the frontend passes 'phone_clean'.
+
+    // Clean phone for search (remove non-digits if necessary, but Supabase usually stores exact matches)
+    // Here we query vivilo_whatsapp_history. 
+    // Note: vivilo_whatsapp_history doesn't always have a clear phone column, it relies on session_id or 'message' data.
+    // However, our Types indicate it has 'session_id'. 
+    // Let's rely on api fetch limit for now.
+
+    // For now, simpler approach: just fetch recent history. 
+    // Ideally we filter by session_id = phone number (if session_id is phone)
+
     const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+      // If session_id is the phone number, use that
+      eq: { session_id: phone },
       order: { column: 'created_at', ascending: false },
       limit: 20
     });
+
     return { history: history || [] };
   }
 
-  async resolveEscalation(id: string, notes: string, classification: string) {
-    const url = `${SUPABASE_URL}/rest/v1/escalations?id=eq.${id}`;
+  async resolveEscalation(
+    id: string,
+    notes: string,
+    classification: string,
+    userId?: string,
+    userName?: string
+  ) {
+    // Update the EXECUTIONS table, not 'escalations'
+    // ID passed here is the execution primary key (number) as string
+    const url = `${SUPABASE_URL}/rest/v1/executions?id=eq.${id}&organization_id=eq.${this.organizationId}`;
 
     const response = await fetch(url, {
       method: 'PATCH',
@@ -363,10 +430,12 @@ class ApiService {
         'Prefer': 'return=representation'
       },
       body: JSON.stringify({
-        status: 'RESOLVED',
-        resolution_notes: notes,
-        classification,
-        resolved_at: new Date().toISOString(),
+        escalation_status: 'RESOLVED',
+        escalation_resolution_notes: notes,
+        escalation_priority: classification, // Map classification back to priority
+        escalation_assigned_to: userId, // Track who resolved it
+        escalation_resolved_by_name: userName, // Adding extra field for name trace
+        escalation_resolved_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       })
     });
@@ -376,6 +445,53 @@ class ApiService {
     }
 
     return response.json();
+  }
+
+  async getTeamMembers() {
+    // Fetch members joined with profiles
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select(`
+        id,
+        user_id,
+        role,
+        created_at,
+        profiles (
+          full_name,
+          email,
+          phone
+        )
+      `)
+      .eq('organization_id', this.organizationId);
+
+    if (error) throw error;
+    return data;
+  }
+
+  async inviteTeamMember(email: string, role: string = 'viewer') {
+    // In a real system, this would send an invite email.
+    // Here we'll simulate by finding matching profile or just preparing the data.
+    // For now, let's just implement the check and basic logic.
+    const { data: profile, error: pError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (pError || !profile) {
+      throw new Error('User not found. They must sign up first.');
+    }
+
+    const { error } = await supabase
+      .from('organization_members')
+      .insert({
+        user_id: profile.id,
+        organization_id: this.organizationId,
+        role
+      });
+
+    if (error) throw error;
+    return { success: true };
   }
 
   async updateAutoTopup(enabled: boolean, threshold: number, amount: number) {
@@ -412,10 +528,14 @@ class ApiService {
     // Reverse history to process chronologically for grouping
     const safeHistory = (history || []).reverse();
 
-    // Filter out tool messages and AI internal traces
+    // Filter out tool messages and AI internal traces using the shared cleaning rule
     const userMessages = safeHistory.filter(msg => {
       if (msg.message.type === 'tool') return false;
-      if (msg.message.type === 'ai' && msg.message.content.startsWith('Calling ')) return false;
+
+      const cleaned = cleanMessageContent(msg.message.content);
+      // If cleaning removes everything (like internal traces), filter it out
+      if (!cleaned && msg.message.type === 'ai') return false;
+
       return msg.message.type === 'human' || msg.message.type === 'ai';
     });
 
@@ -471,7 +591,7 @@ class ApiService {
         id: String(msg.id),
         sender: msg.message.type === 'human' ? 'guest' : 'agent',
         type: 'text',
-        text: msg.message.content || '',
+        text: cleanMessageContent(msg.message.content || ''),
         time: messageTime
       });
     });
