@@ -18,7 +18,8 @@ The 5 Core Constructs of DecisionOS™ must have distinct, meaningful visual ide
 - **Brand Watermark**: Use `ASSETS.logos.icon` (the brand "A") as a subtle background element or pulse animation.
 - **Color Standard**: Primary Gold `#f5d47c`, Background `stone-900`. Use explicit hex overrides.
 - **Glassmorphism**: `bg-stone-900/80` with `backdrop-blur-md` and `border-stone-500/60`.
-- **Navigation Persistence**: URL Hash mapping in `App.tsx` (e.g., `#escalations` -> `View.ESCALATIONS`). Bidirectional sync handles refresh and browser buttons.
+- **Hash-First Navigation**: URL Hash mapping in `App.tsx` (e.g., `#escalations` -> `View.ESCALATIONS`). Bidirectional sync handles refresh and browser buttons. **Critical**: Initial state must prioritize hash over user state to prevent reset during refresh.
+- **Strict Escalation Filtering**: Only show escalations where `human_escalation_triggered` is explicitly `true` AND `escalation_status` is valid (`OPEN`, `RESOLVED`, `DISMISSED`). Never rely on implicit states to prevent "phantom" notification counts.
 - **Data Fetching**: Always use **Supabase JS Client** (`.from().select()`). Never use raw `fetch()` for authenticated data.
 
 ### Premium Transition Logic (Hover)

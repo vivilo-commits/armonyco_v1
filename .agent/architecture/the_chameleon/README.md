@@ -29,8 +29,9 @@ To operate this project with maximum efficiency, you must understand three core 
 - **Naming Convention**: Subscription plans must ALWAYS be named **Starter, Pro, Elite, VIP** in all systems (DB, Frontend, Backend, Stripe).
 - **Presentation Engineering**: Use rigid 16:9 containers (`100vw` / `56.25vw`) for PDF decks. Always check "Background Graphics" in print settings to preserve gold gradients and dark themes.
 - **Logo Protocol**: Use `3.png` for major hero sections and `5.png` (icon-only) for slide headers to maintain a clean, institutional hierarchy.
+- **Governance System Data Flow**: Centralize all logs in `executions` and use strict boolean flags (`human_escalation_triggered = true`) for UI escalation triggers. Avoid creating redundant `escalations` or `decision_logs` tables.
+- **State-Sync Architecture**: Sync all major UI views with URL hashes for persistent, shareable deep-linking. Prioritize window hash during initialization to prevent "home page bounce" on refresh.
 - **Security & Governance**: Always implement Row-Level Security (RLS) using the `organization_members` subquery pattern for multi-tenant isolation. Enable "Leaked Password Protection" in Supabase Auth settings for all production deployments.
-- **Unified Governance Flow**: All human escalations and automated execution logs MUST be centralized in the `executions` table. Avoid creating redundant `escalations` or `decision_logs` tables. The Governance System (n8n) is responsible for the initial Upsert, and the Frontend is responsible for Resolution/Audit.
 
 ---
 
