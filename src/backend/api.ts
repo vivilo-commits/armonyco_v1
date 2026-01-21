@@ -154,18 +154,18 @@ class ApiService {
           : undefined,
 
         // Governance & Quality (4)
-        verdict: (exec.governance_verdict?.toUpperCase() as Verdict) || undefined,
+        verdict: exec.governance_verdict ? (exec.governance_verdict.toUpperCase() as Verdict) : undefined,
         escalation: exec.human_escalation_triggered || false,
-        escalation_priority: exec.escalation_priority,
-        escalation_status: exec.escalation_status,
+        escalation_priority: exec.escalation_priority || undefined,
+        escalation_status: exec.escalation_status || undefined,
 
-        // Business metrics (3)
-        value_captured: exec.value_captured,
-        messages_sent: exec.messages_sent,
-        time_saved: formatTime(exec.time_saved_seconds),
+        // Business metrics (3) - show actual values when available
+        value_captured: exec.value_captured && exec.value_captured > 0 ? exec.value_captured : undefined,
+        messages_sent: exec.messages_sent && exec.messages_sent > 0 ? exec.messages_sent : undefined,
+        time_saved: exec.time_saved_seconds && exec.time_saved_seconds > 0 ? formatTime(exec.time_saved_seconds) : undefined,
 
         // Legacy fields
-        agent: 'Amelia-v4',
+        agent: exec.workflow_name === 'Lara' ? 'Lara-v2' : 'Amelia-v4',
         risk: 'Low'
       };
     });

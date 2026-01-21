@@ -182,16 +182,16 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
                       <AppBadge variant={ev.verdict === 'PASSED' ? 'success' : 'warning'}>
                         {ev.verdict}
                       </AppBadge>
-                    ) : '—'}
+                    ) : <span className="text-stone-600">N/A</span>}
                   </AppTableCell>
                   <AppTableCell className="text-center">
                     {ev.escalation ? '🚨' : '—'}
                   </AppTableCell>
                   <AppTableCell className="text-stone-500 font-mono text-xs text-right">
-                    {ev.value_captured ? `€${ev.value_captured.toFixed(2)}` : '—'}
+                    {ev.value_captured ? `€${ev.value_captured.toFixed(2)}` : <span className="text-stone-600">N/A</span>}
                   </AppTableCell>
                   <AppTableCell className="text-stone-500 text-xs text-center">
-                    {ev.messages_sent || 0}
+                    {ev.messages_sent !== undefined && ev.messages_sent > 0 ? ev.messages_sent : <span className="text-stone-600">0</span>}
                   </AppTableCell>
                 </AppTableRow>
               ))
