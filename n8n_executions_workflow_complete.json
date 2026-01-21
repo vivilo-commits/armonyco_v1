@@ -103,6 +103,14 @@
                             "value": "fdca9122-7683-472b-a13f-20cb43bbb9ff"
                         },
                         {
+                            "column": "time_saved_seconds",
+                            "value": "={{ $json.workflowData?.settings?.timeSavedPerExecution || null }}"
+                        },
+                        {
+                            "column": "messages_sent",
+                            "value": "={{ (() => { const nodes = $json.data?.resultData?.runData || {}; let count = 0; if (nodes['Send message']) count += nodes['Send message'].length; return count > 0 ? count : null; })() }}"
+                        },
+                        {
                             "column": "workflow_output",
                             "value": "={{ JSON.stringify($json.data || {}) }}"
                         }
