@@ -26,9 +26,12 @@ export function calculateDashboardKPIs(
     cashflow?: CashflowSummary | null,
     openEscalationsCount?: number
 ): KPI[] {
-    const totalCount = executions.length;
-    const successCount = executions.filter((e) => e.status === 'success' || e.finished).length;
-    const failedCount = executions.filter((e) => e.status === 'failed' || e.status === 'error').length;
+    // ✅ FIX: Only count FINISHED executions for metrics
+    const finishedExecutions = executions.filter(e => e.finished || e.stopped_at);
+    const totalCount = finishedExecutions.length;
+
+    const successCount = finishedExecutions.filter((e) => e.status === 'success' || e.finished).length;
+    const failedCount = finishedExecutions.filter((e) => e.status === 'failed' || e.status === 'error').length;
 
     const successRate = totalCount > 0 ? Math.round((successCount / totalCount) * 100) : 100;
     const failureRate = totalCount > 0 ? ((failedCount / totalCount) * 100).toFixed(1) : '0.0';
@@ -46,7 +49,8 @@ export function calculateDashboardKPIs(
             ? (cashflow.escalations_avoided ? 0 : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length)
             : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length);
 
-    const latencies = executions
+    // ✅ FIX: Only calculate latency for FINISHED executions
+    const latencies = finishedExecutions
         .filter((e) => e.started_at && e.stopped_at)
         .map((e) => {
             return new Date(e.stopped_at!).getTime() - new Date(e.started_at!).getTime();
@@ -56,10 +60,11 @@ export function calculateDashboardKPIs(
     const p50 = latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.5)] : 0;
     const medianTime = p50 > 0 ? (p50 / 1000).toFixed(1) + 's' : '--';
 
-    const passedGovernance = executions.filter((e) => e.governance_verdict?.toUpperCase() === 'PASSED').length;
-    const decisionIntegrity = totalCount > 0 ? ((passedGovernance / totalCount) * 100).toFixed(1) : '100.0';
+    const passedGovernance = finishedExecutions.filter((e) => e.governance_verdict?.toUpperCase() === 'PASSED').length;
+    // ✅ FIX: Decision Integrity defaults to N/A (0%) not 100% when no governance data
+    const decisionIntegrity = totalCount > 0 ? ((passedGovernance / totalCount) * 100).toFixed(1) : '0.0';
 
-    const totalTimeSaved = executions.reduce((acc, curr) => acc + (curr.time_saved_seconds || 0), 0);
+    const totalTimeSaved = finishedExecutions.reduce((acc, curr) => acc + (curr.time_saved_seconds || 0), 0);
     const avgTimeSaved = totalCount > 0 ? Math.round(totalTimeSaved / totalCount) : 0;
 
     const laraExecutions = executions.filter((e) => e.workflow_name?.toLowerCase() === 'lara')
