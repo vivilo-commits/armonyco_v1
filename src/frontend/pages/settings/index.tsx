@@ -51,7 +51,7 @@ interface TeamMember {
 export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('IDENTITY');
   const { loading, error, retry } = usePageData(() => api.getSettingsData());
-  const { profile, organization, entitlements, refreshProfile } = useAuth();
+  const { profile, organization, entitlements, membership, canEdit, refreshProfile } = useAuth();
 
   // Modal states
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
@@ -86,9 +86,11 @@ export const Settings: React.FC = () => {
   // Team members
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('viewer');
-  const [inviting, setInviting] = useState(false);
+  const [newEmail, setNewEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newFullName, setNewFullName] = useState('');
+  const [newRole, setNewRole] = useState('viewer');
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (entitlements) {
@@ -134,19 +136,25 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleInvite = async () => {
-    if (!inviteEmail) return;
-    setInviting(true);
+  const handleCreateSubAccount = async () => {
+    if (!newEmail || !newPassword || !newFullName) {
+      setSaveMessage('Please fill all fields');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
+    setCreating(true);
     try {
-      await api.inviteTeamMember(inviteEmail, inviteRole);
-      setInviteEmail('');
+      await api.createSubAccount(newEmail, newPassword, newFullName, newRole);
+      setNewEmail('');
+      setNewPassword('');
+      setNewFullName('');
       await fetchTeamMembers();
-      setSaveMessage('Invitation sent!');
-    } catch (e) {
-      console.error('Invite error:', e);
-      setSaveMessage(e instanceof Error ? e.message : 'Failed to invite');
+      setSaveMessage('Account created successfully!');
+    } catch (e: any) {
+      console.error('Create error:', e);
+      setSaveMessage(e.message || 'Failed to create account');
     } finally {
-      setInviting(false);
+      setCreating(false);
       setTimeout(() => setSaveMessage(''), 3000);
     }
   };
@@ -306,6 +314,7 @@ export const Settings: React.FC = () => {
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Your full name"
                       icon={User}
+                      disabled={!canEdit}
                     />
                     <FormField
                       label="Email"
@@ -328,6 +337,7 @@ export const Settings: React.FC = () => {
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+1 (555) 000-0000"
                       icon={Phone}
+                      disabled={!canEdit}
                     />
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
@@ -356,11 +366,12 @@ export const Settings: React.FC = () => {
                       {['professional', 'friendly', 'formal', 'casual'].map((tone) => (
                         <button
                           key={tone}
+                          disabled={!canEdit}
                           onClick={() => setAiTone(tone)}
                           className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${aiTone === tone
                             ? 'bg-stone-900 text-white'
                             : 'bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200'
-                            }`}
+                            } ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           {tone}
                         </button>
@@ -368,23 +379,25 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 pt-4 border-t border-stone-200">
-                    <AppButton
-                      variant="primary"
-                      icon={<Check size={16} />}
-                      onClick={handleSaveIdentity}
-                      loading={saving}
-                    >
-                      Save Changes
-                    </AppButton>
-                    {saveMessage && (
-                      <span
-                        className={`text-sm font-medium ${saveMessage.includes('success') ? 'text-green-400' : 'text-red-400'}`}
+                  {canEdit && (
+                    <div className="flex items-center gap-4 pt-4 border-t border-stone-200">
+                      <AppButton
+                        variant="primary"
+                        icon={<Check size={16} />}
+                        onClick={handleSaveIdentity}
+                        loading={saving}
                       >
-                        {saveMessage}
-                      </span>
-                    )}
-                  </div>
+                        Save Changes
+                      </AppButton>
+                      {saveMessage && (
+                        <span
+                          className={`text-sm font-medium ${saveMessage.includes('success') ? 'text-green-400' : 'text-red-400'}`}
+                        >
+                          {saveMessage}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </AppSection>
             )}
@@ -401,6 +414,7 @@ export const Settings: React.FC = () => {
                       onChange={(e) => setCompanyName(e.target.value)}
                       placeholder="Acme Corporation S.r.l."
                       icon={Building2}
+                      disabled={!canEdit}
                     />
                     <FormField
                       label="VAT / Tax ID"
@@ -408,6 +422,7 @@ export const Settings: React.FC = () => {
                       value={vatNumber}
                       onChange={(e) => setVatNumber(e.target.value)}
                       placeholder="IT12345678901"
+                      disabled={!canEdit}
                     />
                   </div>
 
@@ -421,6 +436,7 @@ export const Settings: React.FC = () => {
                       value={billingStreet}
                       onChange={(e) => setBillingStreet(e.target.value)}
                       placeholder="Via Roma, 123"
+                      disabled={!canEdit}
                     />
                     <div className="grid grid-cols-3 gap-4">
                       <FormField
@@ -429,6 +445,7 @@ export const Settings: React.FC = () => {
                         value={billingCity}
                         onChange={(e) => setBillingCity(e.target.value)}
                         placeholder="Milan"
+                        disabled={!canEdit}
                       />
                       <FormField
                         label="Postal Code"
@@ -436,6 +453,7 @@ export const Settings: React.FC = () => {
                         value={billingPostal}
                         onChange={(e) => setBillingPostal(e.target.value)}
                         placeholder="20121"
+                        disabled={!canEdit}
                       />
                       <div className="space-y-2">
                         <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
@@ -444,7 +462,8 @@ export const Settings: React.FC = () => {
                         <select
                           value={billingCountry}
                           onChange={(e) => setBillingCountry(e.target.value)}
-                          className="w-full px-4 py-3 bg-stone-100 border border-stone-200 rounded-xl text-sm text-stone-900 focus:outline-none focus:ring-2 ring-stone-300"
+                          disabled={!canEdit}
+                          className="w-full px-4 py-3 bg-stone-100 border border-stone-200 rounded-xl text-sm text-stone-900 focus:outline-none focus:ring-2 ring-stone-300 disabled:opacity-50"
                         >
                           <option value="IT">Italy</option>
                           <option value="US">United States</option>
@@ -459,36 +478,57 @@ export const Settings: React.FC = () => {
                   </div>
 
                   <div className="p-6 bg-stone-50 rounded-2xl border border-stone-200">
-                    <div className="flex items-center justify-between mb-6">
-                      <h4 className="text-xs font-bold text-stone-600 uppercase tracking-widest flex items-center gap-2">
+                    <div className="mb-6">
+                      <h4 className="text-xs font-bold text-stone-600 uppercase tracking-widest flex items-center gap-2 mb-4">
                         <Users size={14} /> Team Members
                       </h4>
-                      <div className="flex flex-wrap gap-2">
-                        <select
-                          value={inviteRole}
-                          onChange={(e) => setInviteRole(e.target.value)}
-                          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
-                        >
-                          <option value="viewer">Viewer</option>
-                          <option value="manager">Manager</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                        <input
-                          type="email"
-                          placeholder="Colleague's email"
-                          value={inviteEmail}
-                          onChange={(e) => setInviteEmail(e.target.value)}
-                          className="px-4 py-2 bg-white border border-stone-200 rounded-xl text-sm w-64 focus:outline-none ring-stone-900 focus:ring-1"
-                        />
-                        <AppButton
-                          size="sm"
-                          icon={<Plus size={14} />}
-                          onClick={handleInvite}
-                          loading={inviting}
-                        >
-                          Invite
-                        </AppButton>
-                      </div>
+                      {['owner', 'admin'].includes(membership?.role?.toLowerCase() || '') && (
+                        <div className="bg-white p-6 rounded-2xl border border-stone-200 space-y-4 mb-6">
+                          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Create New Member</p>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <input
+                              type="text"
+                              placeholder="Full Name"
+                              value={newFullName}
+                              onChange={(e) => setNewFullName(e.target.value)}
+                              className="px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                            />
+                            <input
+                              type="email"
+                              placeholder="Email Address"
+                              value={newEmail}
+                              onChange={(e) => setNewEmail(e.target.value)}
+                              className="px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                            />
+                            <input
+                              type="password"
+                              placeholder="Password"
+                              value={newPassword}
+                              onChange={(e) => setNewPassword(e.target.value)}
+                              className="px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                            />
+                            <div className="flex gap-2">
+                              <select
+                                value={newRole}
+                                onChange={(e) => setNewRole(e.target.value)}
+                                className="flex-1 px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                              >
+                                <option value="viewer">Viewer (Read-only)</option>
+                                <option value="manager">Manager</option>
+                                <option value="admin">Admin</option>
+                              </select>
+                              <AppButton
+                                size="sm"
+                                icon={<Plus size={14} />}
+                                onClick={handleCreateSubAccount}
+                                loading={creating}
+                              >
+                                Create
+                              </AppButton>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-3">
@@ -523,7 +563,7 @@ export const Settings: React.FC = () => {
                               }>
                                 {member.role.toUpperCase()}
                               </AppBadge>
-                              {member.role !== 'owner' && (
+                              {canEdit && member.role !== 'owner' && (
                                 <button
                                   onClick={() => handleRemoveMember(member.id)}
                                   className="p-2 text-stone-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
@@ -760,8 +800,9 @@ export const Settings: React.FC = () => {
                           <Crown size={14} className="text-stone-400" /> Auto Top-up
                         </h4>
                         <button
+                          disabled={!canEdit}
                           onClick={() => handleToggleAutoTopup(!autoTopupEnabled)}
-                          className={`w-10 h-5 rounded-full transition-all relative ${autoTopupEnabled ? 'bg-gold-start' : 'bg-stone-300'}`}
+                          className={`w-10 h-5 rounded-full transition-all relative ${autoTopupEnabled ? 'bg-gold-start' : 'bg-stone-300'} ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoTopupEnabled ? 'left-6' : 'left-1'}`} />
                         </button>
@@ -771,9 +812,11 @@ export const Settings: React.FC = () => {
                           ? `Automatically add ${autoTopupAmount} credits when balance falls below ${autoTopupThreshold}.`
                           : "Credit balance is currently managed manually. System will pause at zero."}
                       </p>
-                      <AppButton variant="outline" size="sm" className="w-full">
-                        Manage Auto Top-up
-                      </AppButton>
+                      {canEdit && (
+                        <AppButton variant="outline" size="sm" className="w-full">
+                          Manage Auto Top-up
+                        </AppButton>
+                      )}
                     </div>
                   </div>
 
@@ -783,13 +826,15 @@ export const Settings: React.FC = () => {
                     <p className="text-sm text-stone-500 mb-6 max-w-sm">
                       Upgrade to a higher tier for increased capacity, priority execution, and advanced cognitive depth.
                     </p>
-                    <AppButton
-                      variant="secondary"
-                      icon={<Crown size={18} className="text-gold-start" />}
-                      onClick={() => setPlansModalOpen(true)}
-                    >
-                      Explore Plans & Tiers
-                    </AppButton>
+                    {canEdit && (
+                      <AppButton
+                        variant="secondary"
+                        icon={<Crown size={18} className="text-gold-start" />}
+                        onClick={() => setPlansModalOpen(true)}
+                      >
+                        Explore Plans & Tiers
+                      </AppButton>
+                    )}
                   </div>
                 </div>
               </AppSection>

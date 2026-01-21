@@ -64,8 +64,14 @@ const AppContent: React.FC = () => {
 
   const getInitialView = (): View => {
     const hash = window.location.hash.replace('#', '');
-    if (user && hashToView[hash]) return hashToView[hash];
-    return user ? View.DASHBOARD : View.LANDING;
+    // Always prioritize hash if it exists and is valid
+    if (hash && hashToView[hash]) {
+      return hashToView[hash];
+    }
+    // If user is logged in but no hash, go to dashboard
+    if (user) return View.DASHBOARD;
+    // Otherwise landing page
+    return View.LANDING;
   };
 
   const { user, loading: authLoading, signOut, organizationId, sessionExpired } = useAuth();

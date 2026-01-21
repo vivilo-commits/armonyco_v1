@@ -55,7 +55,7 @@ class ApiService {
         // Note: vivilo_whatsapp_history is excluded as it uses session_id, not organization_id
         const tenantTables = [
           'executions', 'cashflow_summary',
-          'escalations', 'engines', 'addons', 'settings',
+          'engines', 'addons', 'settings',
           'organization_hotels', 'organization_pms_config',
           'organization_entitlements', 'credits_transactions'
         ];
@@ -417,8 +417,17 @@ class ApiService {
     userId?: string,
     userName?: string
   ) {
-    // Update the EXECUTIONS table, not 'escalations'
-    // ID passed here is the execution primary key (number) as string
+    return this.updateEscalation(id, {
+      escalation_status: 'RESOLVED',
+      escalation_resolution_notes: notes,
+      escalation_priority: classification,
+      escalation_assigned_to: userId,
+      escalation_resolved_by_name: userName,
+      escalation_resolved_at: new Date().toISOString(),
+    });
+  }
+
+  async updateEscalation(id: string, updates: any) {
     const url = `${SUPABASE_URL}/rest/v1/executions?id=eq.${id}&organization_id=eq.${this.organizationId}`;
 
     const response = await fetch(url, {
@@ -430,18 +439,13 @@ class ApiService {
         'Prefer': 'return=representation'
       },
       body: JSON.stringify({
-        escalation_status: 'RESOLVED',
-        escalation_resolution_notes: notes,
-        escalation_priority: classification, // Map classification back to priority
-        escalation_assigned_to: userId, // Track who resolved it
-        escalation_resolved_by_name: userName, // Adding extra field for name trace
-        escalation_resolved_at: new Date().toISOString(),
+        ...updates,
         updated_at: new Date().toISOString()
       })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to resolve escalation: ${response.status}`);
+      throw new Error(`Failed to update escalation: ${response.status}`);
     }
 
     return response.json();
@@ -468,29 +472,32 @@ class ApiService {
     return data;
   }
 
-  async inviteTeamMember(email: string, role: string = 'viewer') {
-    // In a real system, this would send an invite email.
-    // Here we'll simulate by finding matching profile or just preparing the data.
-    // For now, let's just implement the check and basic logic.
-    const { data: profile, error: pError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .single();
+  async createSubAccount(email: string, password: string, fullName: string, role: string = 'viewer') {
+    // Note: Creating accounts usually requires administrative privileges or a backend trigger/Edge Function.
+    // For this context, we'll try standard signUp. 
+    // IMPORTANT: In production, use Supabase Auth Admin via an Edge Function to avoid signing the current admin out.
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        }
+      }
+    });
 
-    if (pError || !profile) {
-      throw new Error('User not found. They must sign up first.');
-    }
+    if (authError) throw authError;
 
-    const { error } = await supabase
+    // Link to organization
+    const { error: memberError } = await supabase
       .from('organization_members')
       .insert({
-        user_id: profile.id,
+        user_id: authData.user?.id,
         organization_id: this.organizationId,
         role
       });
 
-    if (error) throw error;
+    if (memberError) throw memberError;
     return { success: true };
   }
 

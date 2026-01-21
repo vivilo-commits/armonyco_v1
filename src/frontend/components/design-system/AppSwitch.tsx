@@ -5,11 +5,12 @@ interface AppSwitchProps {
   onChange: (checked: boolean) => void;
   label?: string;
   description?: string;
+  disabled?: boolean;
 }
 
-export const AppSwitch: React.FC<AppSwitchProps> = ({ checked, onChange, label, description }) => {
+export const AppSwitch: React.FC<AppSwitchProps> = ({ checked, onChange, label, description, disabled }) => {
   return (
-    <div className="flex items-center justify-between group">
+    <div className={`flex items-center justify-between group ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       {(label || description) && (
         <div className="flex flex-col gap-1">
           {label && <span className="text-sm font-bold text-stone-900">{label}</span>}
@@ -21,7 +22,8 @@ export const AppSwitch: React.FC<AppSwitchProps> = ({ checked, onChange, label, 
         </div>
       )}
       <button
-        onClick={() => onChange(!checked)}
+        onClick={() => !disabled && onChange(!checked)}
+        disabled={disabled}
         className={`w-10 h-5 rounded-full relative transition-all duration-300 shadow-inner ${checked ? 'bg-green-500' : 'bg-stone-200'}`}
         aria-label={label || 'Toggle switch'}
       >

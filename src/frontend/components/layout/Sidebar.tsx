@@ -149,9 +149,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <p className="text-[13px] font-bold text-stone-900 truncate tracking-tight">
                 {userInfo.name}
               </p>
-              <p className="text-[11px] font-medium text-stone-400 truncate uppercase tracking-widest leading-none mt-1">
-                Decision OS™
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <p className="text-[11px] font-medium text-stone-400 truncate uppercase tracking-widest leading-none">
+                  Decision OS™
+                </p>
+                <span className="text-[8px] font-bold px-1 py-0.5 bg-gold-start/10 text-gold-start rounded border border-gold-start/20">v1.1</span>
+              </div>
             </div>
           )}
           {!collapsed && onLogout && (

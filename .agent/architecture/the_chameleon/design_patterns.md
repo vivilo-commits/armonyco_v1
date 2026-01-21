@@ -46,7 +46,6 @@ To maintain hospitality-grade excellence, all agents (Amelia, Lara, James, Elon,
 ### Message Cleaning (UX)
 - **Shared Utility**: Use `cleanMessageContent` from `utils.ts` for all displays.
 - **Filtering**: Hide tool messages, internal JSON reasoning, and "Calling..." traces. Only show `human` and `ai` roles.
-
 ## [Security & Governance]
 
 ### Multi-Tenant Isolation (RLS)
@@ -91,6 +90,19 @@ USING (
 );
 ```
 *Note: Allow `NULL` `organization_id` only for historical data migration if explicitly required.*
+
+### Role-Locked UI Pattern (Viewer Mode)
+To ensure multi-tenant integrity for read-only roles:
+- **State Source**: Use `AuthContext` to expose a `canEdit` boolean derived from the user's role (`viewer` = false).
+- **Form Locking**: Always pass `disabled={!canEdit}` to `FormField`, `AppSwitch`, and `AppButton` elements.
+- **Action Suppression**: If a button triggers a modal or side-effect, prefix the `onClick` with `if (!canEdit) return;`.
+- **Inheritance**: Atomic components (like `AppSwitch`) must include a `disabled` prop in their interface to support this global lockdown.
+
+### Direct Account Provisioning
+When creating sub-accounts (non-invite model):
+- **Flow**: Use `supabase.auth.signUp` directly from the Admin's view. This provisions the user immediately.
+- **Linking**: The `signUp` response must be used to immediately insert a record into `organization_members`.
+- **Security**: In production, prefer the Supabase Admin SDK (Service Role) for direct user creation to avoid triggering email confirmation blockers for the admin user.
 
 ## [Maintenance & Structure]
 

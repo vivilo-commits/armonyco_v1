@@ -31,4 +31,5 @@ Technical memory and architectural guardrails.
 3. **Institutional Persona**: UI must follow the "Gold on Stone" theme. Icons must use $2.5$ stroke width and explicit hex `#f5d47c`.
 4. **Navigation Persistence**: The app must use URL Hash sync to survive refreshes and maintain user context.
 5. **Multi-Tenant Integrity**: Every query must be governed by an RLS policy using the `organization_id` membership pattern.
-6. **Clean Maintenance**: All local build artifacts (`dist/`) and temporary dumps must be purged immediately after consolidation.
+6. **Role-Based Permissions**: UI elements must be programmatically locked using the `canEdit` flag from `AuthContext` for `viewer` roles.
+7. **Clean Maintenance**: All local build artifacts (`dist/`) and temporary dumps must be purged immediately after consolidation.

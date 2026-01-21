@@ -11,6 +11,7 @@ import {
 import { api } from '@/backend/api';
 import { cleanMessageContent } from '@/backend/utils';
 import { Escalation, WhatsAppHistory } from '@/backend/types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface EscalationDetailModalProps {
   isOpen: boolean;
@@ -25,10 +26,13 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
   escalation,
   onResolved,
 }) => {
+  const { canEdit } = useAuth();
   const [showProofForm, setShowProofForm] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [history, setHistory] = React.useState<WhatsAppHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [saveStatus, setSaveStatus] = React.useState<'idle' | 'success' | 'error'>('idle');
   const [formData, setFormData] = React.useState({
     notes: '',
     classification: escalation?.classification || 'M1',
@@ -53,6 +57,25 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
       console.error('Failed to load escalation context', e);
     } finally {
       setLoadingHistory(false);
+    }
+  };
+
+  const handleSaveDetails = async () => {
+    if (!escalation) return;
+    setIsSaving(true);
+    setSaveStatus('idle');
+    try {
+      await api.updateEscalation(escalation.id, {
+        escalation_resolution_notes: formData.notes,
+        escalation_priority: formData.classification,
+      });
+      setSaveStatus('success');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    } catch (e) {
+      console.error('Failed to save escalation details', e);
+      setSaveStatus('error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -154,6 +177,64 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
               </AppCard>
             </div>
 
+            {/* Escalation Notes & Classification - Editable */}
+            <AppCard variant="light" className="p-6 space-y-6">
+              <div className="flex flex-col md:flex-row gap-6">
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500 ml-1">
+                    Classification
+                  </label>
+                  <select
+                    className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-gold-start"
+                    value={formData.classification}
+                    onChange={(e) => setFormData({ ...formData, classification: e.target.value })}
+                    disabled={!canEdit}
+                  >
+                    <option value="M1">M1 (Standard)</option>
+                    <option value="M2">M2 (Follow-up)</option>
+                    <option value="M3">M3 (Priority)</option>
+                    <option value="Critical">Critical Issue</option>
+                  </select>
+                </div>
+                <div className="flex-[2] space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500 ml-1">
+                    Resolution Notes
+                  </label>
+                  <textarea
+                    className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-gold-start min-h-[80px]"
+                    placeholder="Enter resolution notes or progress updates..."
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    disabled={!canEdit}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center gap-2">
+                  {saveStatus === 'success' && (
+                    <span className="text-[10px] text-green-500 font-bold uppercase tracking-widest flex items-center gap-1 animate-in fade-in transition-all">
+                      <CheckCircle2 size={12} /> Changes Saved
+                    </span>
+                  )}
+                  {saveStatus === 'error' && (
+                    <span className="text-[10px] text-red-500 font-bold uppercase tracking-widest">
+                      Failed to save
+                    </span>
+                  )}
+                </div>
+                {canEdit && (
+                  <AppButton
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleSaveDetails}
+                    loading={isSaving}
+                  >
+                    Save Changes
+                  </AppButton>
+                )}
+              </div>
+            </AppCard>
+
             {/* Trigger Message - The message that caused the escalation */}
             {escalation.metadata?.trigger_message && (
               <AppCard variant="light" className="p-5">
@@ -161,7 +242,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                   Triggering Message
                 </div>
                 <div className="bg-stone-50 border border-stone-100 rounded-xl p-4">
-                  <p className="text-sm text-stone-700 leading-relaxed">
+                  <p className="text-sm text-stone-700 leading-relaxed italic">
                     "{escalation.metadata.trigger_message}"
                   </p>
                 </div>
@@ -224,6 +305,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                 className="flex-1"
                 onClick={() => setShowProofForm(true)}
                 icon={<CheckCircle2 size={18} />}
+                disabled={!canEdit}
               >
                 Resolve Escalation
               </AppButton>

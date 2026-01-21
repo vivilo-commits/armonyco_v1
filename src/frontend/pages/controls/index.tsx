@@ -13,12 +13,14 @@ import {
 import { api } from '@/backend/api';
 import { usePageData } from '@/frontend/hooks/usePageData';
 import { ControlEngine, ControlAddon } from '@/backend/types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface ControlsProps {
   searchTerm?: string;
 }
 
 export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
+  const { canEdit } = useAuth();
   const [showSaveModal, setShowSaveModal] = React.useState(false);
   const { data, loading, error, retry } = usePageData<{
     toneOfVoice: string;
@@ -130,7 +132,7 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
             variant="primary"
             icon={<Shield size={16} />}
             onClick={handleCommitChanges}
-            disabled={!hasChanges || saving}
+            disabled={!canEdit || !hasChanges || saving}
             loading={saving}
           >
             Commit Changes
@@ -172,24 +174,28 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
                     placeholder="Professional & Warm"
                     value={toneOfVoice}
                     onChange={(e) => setToneOfVoice(e.target.value)}
+                    disabled={!canEdit}
                   />
                   <FormField
                     label="Languages"
                     placeholder="English, Italian, Spanish"
                     value={languages}
                     onChange={(e) => setLanguages(e.target.value)}
+                    disabled={!canEdit}
                   />
                   <FormField
                     label="Formality level"
                     placeholder="Medium"
                     value={formalityLevel}
                     onChange={(e) => setFormalityLevel(e.target.value)}
+                    disabled={!canEdit}
                   />
                   <FormField
                     label="Brand keywords"
                     placeholder="Premium, Reliable, Direct"
                     value={brandKeywords}
                     onChange={(e) => setBrandKeywords(e.target.value)}
+                    disabled={!canEdit}
                   />
                 </div>
               </AppSection>
@@ -204,6 +210,7 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
                   {['Standard', 'Advanced', 'Pro', 'Elite', 'Max'].map((level) => (
                     <button
                       key={level}
+                      disabled={!canEdit}
                       onClick={async () => {
                         if (data?.intelligenceMode === level) return;
                         try {
@@ -214,9 +221,10 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
                         }
                       }}
                       className={`
-                      px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all
-                      ${level === (data?.intelligenceMode || 'Pro') ? 'bg-stone-900 text-white shadow-premium' : 'text-stone-400 hover:text-stone-600'}
-                    `}
+                        px-4 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all
+                        ${level === (data?.intelligenceMode || 'Pro') ? 'bg-stone-900 text-white shadow-premium' : 'text-stone-400 hover:text-stone-600'}
+                        ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}
+                      `}
                     >
                       {level}
                     </button>
@@ -243,6 +251,7 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
                         <div className="flex items-center justify-between mb-4">
                           <div className="font-bold text-sm text-stone-900 group-hover:text-gold-start transition-colors">{engine.name}</div>
                           <AppSwitch
+                            disabled={!canEdit}
                             checked={engine.status === 'Active'}
                             onChange={async (checked) => {
                               try {
@@ -274,17 +283,20 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
                 subtitle="Managed services and upsells available for guest request."
                 icon={<Rocket size={18} className="text-stone-400" />}
                 action={
-                  <AppButton variant="outline" size="sm">
-                    Add an add-on
-                  </AppButton>
+                  canEdit && (
+                    <AppButton variant="outline" size="sm">
+                      Add an add-on
+                    </AppButton>
+                  )
                 }
               >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {filteredAddons.map((addon: ControlAddon) => (
                     <div
                       key={addon.id}
-                      className="bg-white/50 backdrop-blur-lg border border-white/25 rounded-2xl p-5 hover:border-gold-start/40 hover:shadow-premium transition-all duration-300 group flex flex-col justify-between h-full cursor-pointer"
+                      className={`bg-white/50 backdrop-blur-lg border border-white/25 rounded-2xl p-5 hover:border-gold-start/40 hover:shadow-premium transition-all duration-300 group flex flex-col justify-between h-full ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-80'}`}
                       onClick={async () => {
+                        if (!canEdit) return;
                         try {
                           await api.updateAddonStatus(addon.id, !addon.enabled);
                           retry();
