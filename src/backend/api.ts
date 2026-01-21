@@ -348,8 +348,16 @@ class ApiService {
 
     if (!executions) return [];
 
+    // CRITICAL: Filter out any executions that don't have a valid escalation status
+    // This prevents showing executions where human_escalation_triggered might be incorrectly set
+    const validEscalations = executions.filter(exec =>
+      exec.human_escalation_triggered === true &&
+      exec.escalation_status &&
+      exec.escalation_status !== ''
+    );
+
     // Map Execution to Escalation interface for frontend compatibility
-    return executions.map(exec => {
+    return validEscalations.map(exec => {
       // Calculate response time if resolved
       let responseTimeMinutes: number | undefined;
       if (exec.escalation_resolved_at && (exec.escalation_opened_at || exec.created_at)) {
