@@ -40,7 +40,7 @@ This log captures specific project "recipes" and lessons to ensure zero-mistake 
 - **Persistence First**: Prioritize the dedicated `escalations` table as the "Source of Truth" for status, while using `executions` only for discovery of new triggers.
 - **Accurate KPIs**: For large historical tables (like `vivilo_whatsapp_history`), use exact count queries (`{ count: 'exact', head: true }`) for accuracy instead of relying on limited fetch arrays.
 
-## Robust Linkage & Normalization
-- **Phone Normalization**: Always strip non-numeric characters (except leading +) when matching identifiers (e.g., `phone_clean` vs `session_id`). This ensures reliability across CRM and messaging logs.
-- **Deep Metadata Extraction**: In automation scenarios (e.g., n8n), don't trust top-level status flags alone if `workflow_output` or similar JSONB data exists. Look deep into tool outputs to reconstruct state.
-- **Visual Highlighting**: Pass specific triggering IDs (`message_id`) to the UI to provide immediate context in detailed views, reducing operator cognitive load.
+## UI Cleanup & Premium Styling
+- **Redundant Components**: Remove deprecated features (like "Universal Engines") from control panels to reduce cognitive load and simplify the UI.
+- **Layout Precision**: Ensure alignment across different sections of settings/profile pages. Use consistent padding and centering for action buttons (especially those with status feedback labels) to maintain a premium feel.
+- **Micro-Copy Matters**: Be precise with labels and descriptions (e.g. "Opened At" vs "Reported At") to ensure consistency with industry standards.
