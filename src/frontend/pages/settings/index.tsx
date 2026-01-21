@@ -380,21 +380,24 @@ export const Settings: React.FC = () => {
                   </div>
 
                   {canEdit && (
-                    <div className="flex items-center gap-4 pt-4 border-t border-stone-200">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-6 mt-4 border-t border-stone-100">
                       <AppButton
                         variant="primary"
                         icon={<Check size={16} />}
                         onClick={handleSaveIdentity}
                         loading={saving}
                       >
-                        Save Changes
+                        Save Personal Changes
                       </AppButton>
                       {saveMessage && (
-                        <span
-                          className={`text-sm font-medium ${saveMessage.includes('success') ? 'text-green-400' : 'text-red-400'}`}
+                        <div
+                          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold animate-in fade-in slide-in-from-left-2 transition-all ${saveMessage.includes('success')
+                            ? 'bg-green-50 text-green-600 border border-green-100'
+                            : 'bg-red-50 text-red-600 border border-red-100'}`}
                         >
+                          {saveMessage.includes('success') ? <Check size={14} /> : null}
                           {saveMessage}
-                        </span>
+                        </div>
                       )}
                     </div>
                   )}
@@ -578,7 +581,7 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 pt-4 border-t border-stone-200">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-6 border-t border-stone-100">
                     <AppButton
                       variant="primary"
                       icon={<Check size={16} />}
@@ -588,11 +591,14 @@ export const Settings: React.FC = () => {
                       Save Organization
                     </AppButton>
                     {saveMessage && (
-                      <span
-                        className={`text-sm font-medium ${saveMessage.includes('success') || saveMessage.includes('updated') ? 'text-green-400' : 'text-red-400'}`}
+                      <div
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold animate-in fade-in slide-in-from-left-2 transition-all ${saveMessage.includes('success') || saveMessage.includes('updated')
+                          ? 'bg-green-50 text-green-600 border border-green-100'
+                          : 'bg-red-50 text-red-600 border border-red-100'}`}
                       >
+                        {saveMessage.includes('success') || saveMessage.includes('updated') ? <Check size={14} /> : null}
                         {saveMessage}
-                      </span>
+                      </div>
                     )}
                   </div>
                 </div>

@@ -39,7 +39,9 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
   });
 
   React.useEffect(() => {
-    if (isOpen && escalation?.phone_clean) {
+    // Load context if we have any identifier (phone_clean, session_id, or ai_output for healing)
+    const hasIdentifier = escalation?.phone_clean || escalation?.metadata?.session_id || escalation?.metadata?.ai_output;
+    if (isOpen && hasIdentifier) {
       loadContext();
     } else {
       setShowProofForm(false);
@@ -48,10 +50,15 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
   }, [isOpen, escalation]);
 
   const loadContext = async () => {
-    if (!escalation?.phone_clean) return;
+    if (!escalation) return;
     setLoadingHistory(true);
     try {
-      const { history: historyData } = await api.getEscalationContext(escalation.phone_clean);
+      // Pass both the identifier (phone/session) AND the ai_output content for healing
+      // This allows the backend to find the correct session if the initial ID is missing (e.g. 17816)
+      const identifier = escalation.phone_clean || escalation.metadata?.session_id;
+      const aiOutput = escalation.metadata?.ai_output;
+
+      const { history: historyData } = await api.getEscalationContext(identifier, aiOutput);
       setHistory(historyData);
     } catch (e) {
       console.error('Failed to load escalation context', e);
@@ -114,27 +121,68 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
         {!showProofForm ? (
           <>
             {/* Header Info */}
-            <div className="flex items-start justify-between bg-stone-900 p-8 rounded-[2rem] text-white">
-              <div className="space-y-3">
-                <AppBadge variant={escalation.classification === 'Critical' ? 'error' : 'warning'}>
-                  {escalation.classification || 'M1'} Priority
-                </AppBadge>
-                <h3 className="text-xl font-bold font-serif">{escalation.phone_clean}</h3>
-                <div className="flex items-center gap-4 text-xs text-stone-400 font-mono">
-                  <span className="flex items-center gap-1.5">
-                    <Shield size={14} /> ID: {escalation.id.substring(0, 8)}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Clock size={14} /> {new Date(escalation.created_at).toLocaleString()}
-                  </span>
+            <div className="bg-stone-900 p-8 rounded-[2rem] text-white shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gold-start/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none group-hover:bg-gold-start/20 transition-all duration-500" />
+
+              <div className="flex items-start justify-between relative z-10">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <AppBadge variant={escalation.classification === 'Critical' ? 'error' : 'warning'}>
+                      {escalation.classification || 'M1'} Priority
+                    </AppBadge>
+                    {escalation.status === 'RESOLVED' && (
+                      <AppBadge variant="success">RESOLVED</AppBadge>
+                    )}
+                  </div>
+
+                  <h3 className="text-2xl font-black font-serif tracking-tight">{escalation.phone_clean}</h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 mt-4">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-stone-500 uppercase tracking-widest font-black mb-1">Opened At</span>
+                      <span className="text-xs text-stone-300 font-mono flex items-center gap-2">
+                        <Clock size={12} className="text-gold-start" /> {new Date(escalation.created_at).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {escalation.status === 'RESOLVED' && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-stone-500 uppercase tracking-widest font-black mb-1">Resolved By</span>
+                        <span className="text-xs text-green-400 font-mono flex items-center gap-2 uppercase">
+                          <CheckCircle2 size={12} /> {escalation.resolved_by_name || escalation.metadata?.resolved_by_name || 'System Operator'}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-stone-500 uppercase tracking-widest font-black mb-1">Escalation ID</span>
+                      <span className="text-xs text-stone-400 font-mono">
+                        #{escalation.id.substring(0, 8)}
+                      </span>
+                    </div>
+
+                    {escalation.status === 'RESOLVED' && (
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-stone-500 uppercase tracking-widest font-black mb-1">Resolved At</span>
+                        <span className="text-xs text-stone-300 font-mono">
+                          {escalation.resolved_at
+                            ? new Date(escalation.resolved_at).toLocaleString()
+                            : escalation.updated_at
+                              ? new Date(escalation.updated_at).toLocaleString()
+                              : '--'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="text-right">
-                <div className="text-[10px] text-stone-500 uppercase tracking-widest font-bold mb-1">
-                  Status
-                </div>
-                <div className="text-gold-gradient font-bold uppercase tracking-widest text-xs">
-                  Escalation Open
+
+                <div className="text-right">
+                  <div className="text-[10px] text-stone-500 uppercase tracking-widest font-black mb-1">
+                    Context Source
+                  </div>
+                  <div className="text-gold-gradient font-black uppercase tracking-widest text-xs flex items-center gap-1.5 justify-end">
+                    <Shield size={14} /> {escalation.metadata?.workflow || 'Amelia Core'}
+                  </div>
                 </div>
               </div>
             </div>
@@ -160,8 +208,8 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                     {escalation.metadata?.risk_type || 'Standard'}
                   </div>
                   {escalation.metadata?.score !== undefined && (
-                    <AppBadge variant={escalation.metadata.score > 0.8 ? 'error' : 'warning'}>
-                      {Math.round(escalation.metadata.score * 100)}%
+                    <AppBadge variant={Number(escalation.metadata.score) > 0.8 ? 'error' : 'warning'}>
+                      {Math.round(Number(escalation.metadata.score) * 100)}%
                     </AppBadge>
                   )}
                 </div>
@@ -274,16 +322,23 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                     if (!cleanedText && h.message?.type === 'ai') return null;
 
                     const isInbound = h.message?.type === 'human';
+                    const isTrigger = escalation.metadata?.message_id && (String(h.id) === String(escalation.metadata.message_id));
+
                     return (
                       <div
                         key={h.id}
                         className={`flex flex-col ${isInbound ? 'items-start' : 'items-end'}`}
                       >
+                        {isTrigger && (
+                          <span className="text-[10px] text-gold-end font-bold uppercase tracking-widest mb-1.5 ml-1 flex items-center gap-1 animate-pulse">
+                            <Shield size={10} /> Escalation Trigger
+                          </span>
+                        )}
                         <div
                           className={`
-                            max-w-[85%] p-3 rounded-2xl text-xs
+                            max-w-[85%] p-3 rounded-2xl text-xs transition-all duration-500
                             ${isInbound
-                              ? 'bg-white border border-stone-200 text-stone-800'
+                              ? 'bg-white border text-stone-800 ' + (isTrigger ? 'border-gold-end shadow-lg shadow-gold-start/20' : 'border-stone-200')
                               : 'bg-stone-900 text-white shadow-md'}
                           `}
                         >

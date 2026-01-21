@@ -102,7 +102,9 @@ export interface Escalation {
   phone_clean: string;
   execution_id?: string;
   status: 'OPEN' | 'RESOLVED' | 'DISMISSED';
+  priority?: Priority;
   classification?: string;
+  reason?: string;
   resolution_notes?: string;
   resolved_by?: string;
   resolved_by_name?: string;
@@ -114,6 +116,10 @@ export interface Escalation {
     score?: number | string;
     response_time_minutes?: number;
     trigger_message?: string;
+    session_id?: string;
+    message_id?: string;
+    ai_output?: string;
+    resolved_by_name?: string;
     [key: string]: any;
   };
   created_at: string;

@@ -10,8 +10,17 @@ import type {
   CashflowSummary,
   Conversation
 } from './types';
+import {
+  calculateDashboardKPIs,
+  calculateGrowthKPIs,
+  normalizePriority,
+  normalizeRiskLevel,
+  cleanMessageContent,
+  normalizePhone,
+  parseCurrency,
+  formatCurrency
+} from './utils';
 import { CashflowTransaction } from './cashflow-api';
-import { calculateDashboardKPIs, cleanMessageContent, parseCurrency, formatCurrency, calculateGrowthKPIs } from './utils';
 export { parseCurrency, formatCurrency };
 import { supabase } from '@/database/supabase';
 
@@ -39,6 +48,7 @@ class ApiService {
     options: {
       select?: string;
       eq?: Record<string, any>;
+      filter?: { column: string; value: any }; // Added for getEscalationContext
       order?: { column: string; ascending?: boolean };
       limit?: number;
     } = {}
@@ -60,6 +70,10 @@ class ApiService {
         ];
 
         if (tenantTables.includes(table)) {
+          // [DIAGNOSTIC] Temporarily skip filter for escalations to debug disappearance
+          // But actually, we SHOULD keep it for security. 
+          // I will ONLY skip it if it's the specific cause.
+          // Let's bring it back and fix the logical error in merging.
           query = query.eq('organization_id', this.organizationId);
         }
       }
@@ -69,6 +83,11 @@ class ApiService {
         Object.entries(options.eq).forEach(([key, value]) => {
           query = query.eq(key, value);
         });
+      }
+
+      // Apply single filter (for getEscalationContext)
+      if (options.filter) {
+        query = query.eq(options.filter.column, options.filter.value);
       }
 
       if (options.order) {
@@ -155,7 +174,7 @@ class ApiService {
 
         // Governance & Quality (4)
         verdict: exec.governance_verdict ? (exec.governance_verdict.toUpperCase() as Verdict) : undefined,
-        escalation: exec.human_escalation_triggered || false,
+        escalation: exec.human_escalation_triggered || !!(exec.escalation_status || exec.escalation_priority || exec.human_escalation_reason),
         escalation_priority: exec.escalation_priority || undefined,
         escalation_status: exec.escalation_status || undefined,
 
@@ -171,9 +190,20 @@ class ApiService {
     });
 
     // Use cashflow aggregation and accurate escalation count for KPIs
+    // Filter by organization_id for accurate count
+    let messageQuery = supabase
+      .from('vivilo_whatsapp_history')
+      .select('*', { count: 'exact', head: true });
+
+    if (this.organizationId) {
+      messageQuery = messageQuery.eq('organization_id', this.organizationId);
+    }
+
+    const { count: trueMessageCount } = await messageQuery;
+
     const kpis = calculateDashboardKPIs(
       safeExecutions,
-      safeHistory.length,
+      trueMessageCount || 0,
       {
         total_revenue: cashflowAgg.total_revenue,
         executions_count: cashflowAgg.transaction_count,
@@ -343,121 +373,254 @@ class ApiService {
     return response.json();
   }
 
+  /**
+   * Safely parse workflow_output, handling potential double-stringification
+   */
+  private robustParseOutput(rawOutput: any): any {
+    if (!rawOutput) return {};
+    let data = rawOutput;
+    try {
+      if (typeof data === 'string') {
+        data = JSON.parse(data);
+        // Sometimes it's double stringified from certain n8n versions
+        if (typeof data === 'string') {
+          data = JSON.parse(data);
+        }
+      }
+    } catch (e) {
+      console.warn('[API] Failed to parse workflow_output:', e);
+      return {};
+    }
+    return data || {};
+  }
+
   // --- Escalations ---
 
   async getEscalationsData(status?: string): Promise<Escalation[]> {
-    // 1. Fetch from 'escalations' (dedicated table), excluding mock data
+    console.log('[API] 📋 getEscalationsData called with status:', status);
+
+    // 1. Fetch from 'escalations' (dedicated table) - PRIMARY SOURCE
     const escalationsRes = await this.supabaseFetch<Escalation[]>('escalations', {
-      ...(status ? { eq: { status } } : {}),
       order: { column: 'created_at', ascending: false }
     });
+    console.log('[API] 📋 Escalations table returned:', escalationsRes?.length || 0, 'records');
 
-    // 2. Fetch from 'executions' (legacy/automatic triggers), excluding mock data
-    const executionsRes = await this.supabaseFetch<Execution[]>('executions', {
-      eq: {
-        human_escalation_triggered: true,
-        ...(status ? { escalation_status: status } : {})
-      },
-      order: { column: 'created_at', ascending: false }
+    // 2. Fetch from 'executions' - SECONDARY SOURCE for detection
+    const allExecutions = await this.supabaseFetch<Execution[]>('executions', {
+      order: { column: 'created_at', ascending: false },
+      limit: 500
+    });
+    console.log('[API] 📋 Executions table returned:', allExecutions?.length || 0, 'records');
+
+    const isMock = (id?: string) => id?.startsWith('hist-') || id?.startsWith('test-');
+
+    // Detect escalations from executions
+    // STRICT: Only count as escalation if human_escalation_triggered is EXPLICITLY true
+    // This prevents false positives from the n8n Universal Normalizer
+    const mappedExecutions: Escalation[] = (allExecutions || [])
+      .filter(exec => {
+        // Skip mock/test data
+        if (isMock(exec.execution_id) || isMock(exec.workflow_name)) return false;
+
+        const workflowData = this.robustParseOutput(exec.workflow_output);
+
+        // STRICT detection: Only if explicitly triggered = true
+        // The n8n normalizer was setting this to true even when it shouldn't
+        const isExplicitlyTriggered =
+          exec.human_escalation_triggered === true ||
+          workflowData?.human_escalation_triggered === true;
+
+        // Additional check: must have a meaningful reason (not just empty string or default)
+        const hasMeaningfulReason =
+          (exec.human_escalation_reason && exec.human_escalation_reason.length > 5) ||
+          (workflowData?.human_escalation_reason && workflowData.human_escalation_reason.length > 5) ||
+          (workflowData?.escalation?.reason && workflowData.escalation.reason.length > 5);
+
+        // Only count as escalation if BOTH conditions are met:
+        // 1. Explicitly triggered
+        // 2. Has a meaningful reason (not auto-generated defaults)
+        const hasTrigger = isExplicitlyTriggered && hasMeaningfulReason;
+
+        if (hasTrigger) {
+          console.log('[API] 📋 Found real escalation:', exec.execution_id, 'reason:', exec.human_escalation_reason || workflowData?.human_escalation_reason);
+        }
+
+        return hasTrigger;
+      })
+      .map(exec => {
+        const workflowData = this.robustParseOutput(exec.workflow_output);
+
+        const sessionId = workflowData?.channel?.conversation_id ||
+          workflowData?.guest?.session_id ||
+          workflowData?.session_id || '';
+
+        const messageId = workflowData?.channel?.message_id ||
+          workflowData?.message_id || '';
+
+        const aiOutput = workflowData?.ai_output || workflowData?.message || '';
+        const triggerMessage = workflowData?.trigger_message || workflowData?.escalation?.trigger_message || '';
+
+        const safePhone = workflowData?.guest?.phone || sessionId || '';
+        const phoneClean = typeof safePhone === 'string' ? normalizePhone(safePhone) : '';
+
+        // Determine status from multiple sources
+        const resolvedStatus = (
+          exec.escalation_status?.toUpperCase() === 'RESOLVED' ||
+          workflowData?.escalation_status?.toUpperCase() === 'RESOLVED'
+        ) ? 'RESOLVED' : 'OPEN';
+
+        return {
+          id: exec.execution_id,
+          phone_clean: phoneClean || exec.execution_id,
+          execution_id: exec.execution_id,
+          status: resolvedStatus as 'OPEN' | 'RESOLVED' | 'DISMISSED',
+          priority: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'LOW'),
+          classification: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'M1'),
+          reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.escalation?.reason || 'Human interaction requested',
+          organization_id: exec.organization_id || this.organizationId || '',
+          created_at: exec.created_at || new Date().toISOString(),
+          updated_at: exec.updated_at || new Date().toISOString(),
+          metadata: {
+            message_id: messageId,
+            session_id: sessionId,
+            ai_output: aiOutput,
+            trigger_message: triggerMessage,
+            workflow: exec.workflow_name || 'System',
+            risk_type: normalizeRiskLevel(workflowData?.risk?.type),
+            score: workflowData?.risk?.score || 0,
+            reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.escalation?.reason
+          }
+        };
+      });
+
+    console.log('[API] 📋 Mapped executions with escalation triggers:', mappedExecutions.length);
+
+    // Build unified map with de-duplication
+    const unifiedMap = new Map<string, Escalation>();
+
+    // 1. Load from escalations table first (PRIMARY - has persistence status)
+    (escalationsRes || []).forEach(e => {
+      const sid = e.phone_clean || e.metadata?.session_id || e.id;
+      unifiedMap.set(sid, e);
     });
 
-    const unified: Escalation[] = [];
+    // 2. Merge from executions (only add if not already in escalations table)
+    mappedExecutions.forEach(e => {
+      const sid = (e.phone_clean && e.phone_clean.length > 3)
+        ? e.phone_clean
+        : (e.metadata?.session_id || e.id);
 
-    // Helper to check if execution_id is mock/test data
-    const isMockData = (executionId: string | null | undefined): boolean => {
-      if (!executionId) return false;
-      return executionId.startsWith('hist-') || executionId.startsWith('test-');
-    };
+      const existing = unifiedMap.get(sid);
 
-    // Process new table records first (these are the source of truth), excluding mock data
-    if (escalationsRes) {
-      unified.push(...escalationsRes
-        .filter(esc => !isMockData(esc.execution_id))
-        .map(esc => ({
-          ...esc,
-          organization_id: esc.organization_id || this.organizationId || ''
-        }))
-      );
-    }
+      if (!existing) {
+        // New escalation detected from execution
+        unifiedMap.set(sid, e);
+      } else {
+        // Escalation already exists - keep the persisted status, but update metadata if execution is newer
+        const existingDate = new Date(existing.created_at).getTime();
+        const detectedDate = new Date(e.created_at).getTime();
+        if (detectedDate > existingDate) {
+          unifiedMap.set(sid, {
+            ...e,
+            id: existing.id, // Keep original ID for updates
+            status: existing.status, // Keep persisted status
+          });
+        }
+      }
+    });
 
-    // Track execution_ids that already have dedicated escalation entries
-    const existingExecutionIds = new Set(
-      unified
-        .map(esc => esc.execution_id)
-        .filter((id): id is string => id !== null && id !== undefined)
-    );
+    const unified = Array.from(unifiedMap.values());
+    console.log('[API] 📋 Unified escalations before filtering:', unified.length);
 
-    // Process legacy table records and map them, excluding mock data and duplicates
-    if (executionsRes) {
-      const legacyMapped = executionsRes
-        .filter(exec => !isMockData(exec.execution_id)) // Exclude mock data
-        .filter(exec => exec.escalation_status && exec.escalation_status !== '')
-        .filter(exec => !existingExecutionIds.has(exec.execution_id)) // Deduplicate
-        .map(exec => {
-          const durationMs = exec.stopped_at && exec.started_at
-            ? new Date(exec.stopped_at).getTime() - new Date(exec.started_at).getTime()
-            : 0;
+    // Filter by status if requested
+    const filtered = status && status !== 'ALL'
+      ? unified.filter(e => e.status === status.toUpperCase())
+      : unified;
 
-          // Extract workflow-specific data from JSONB if available
-          const workflowData = exec.workflow_output || {};
-          const guestPhone = workflowData?.guest?.phone || workflowData?.whatsapp?.contact_name || '';
-          const triggerMessage = workflowData?.channel?.message_body || '';
+    console.log('[API] 📋 Final filtered escalations:', filtered.length, 'for status:', status);
 
-          const escalationData: Escalation = {
-            id: exec.execution_id,
-            phone_clean: guestPhone,
-            execution_id: exec.execution_id,
-            status: (exec.escalation_status || 'OPEN') as 'OPEN' | 'RESOLVED' | 'DISMISSED',
-            classification: exec.escalation_priority || 'medium',
-            resolution_notes: workflowData?.escalation?.resolution_notes,
-            resolved_by: workflowData?.escalation?.assigned_to,
-            resolved_at: workflowData?.escalation?.resolved_at,
-            organization_id: exec.organization_id || '',
-            metadata: {
-              reason: exec.human_escalation_reason,
-              workflow: exec.workflow_name,
-              risk_type: workflowData?.risk?.type,
-              score: workflowData?.risk?.score,
-              response_time_minutes: Math.round(durationMs / 60000),
-              trigger_message: triggerMessage,
-            },
-            created_at: exec.created_at || new Date().toISOString(),
-            updated_at: exec.updated_at || exec.created_at || new Date().toISOString(),
-          };
-          return escalationData;
-        });
-      unified.push(...legacyMapped);
-    }
+    // Sort by newest first
+    filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-    // Sort combined results by created_at descending
-    return unified.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return filtered;
   }
 
-  async getEscalationContext(identifier: string) {
-    // Helper to find context. Identifier might be phone number or execution ID.
-    // We search whatsapp history primarily by matching phone numbers.
-    let phone = identifier;
+  async getEscalationContext(identifier?: string, aiOutput?: string) {
+    console.log('[API] 📱 getEscalationContext called with:', { identifier, aiOutputLength: aiOutput?.length });
 
-    // If identifier looks like an execution ID (UUID ish) or small ID, we might need to look up the execution first
-    // But typically the frontend passes 'phone_clean'.
+    if (!identifier && !aiOutput) {
+      console.log('[API] ⚠️ No identifier or aiOutput provided');
+      return { history: [] };
+    }
 
-    // Clean phone for search (remove non-digits if necessary, but Supabase usually stores exact matches)
-    // Here we query vivilo_whatsapp_history. 
-    // Note: vivilo_whatsapp_history doesn't always have a clear phone column, it relies on session_id or 'message' data.
-    // However, our Types indicate it has 'session_id'. 
-    // Let's rely on api fetch limit for now.
+    // 1. Try direct identifier match (phone/session_id) - try both raw and normalized
+    if (identifier) {
+      const cleanId = normalizePhone(identifier);
+      console.log('[API] 📱 Trying identifier:', identifier, '-> cleaned:', cleanId);
 
-    // For now, simpler approach: just fetch recent history. 
-    // Ideally we filter by session_id = phone number (if session_id is phone)
+      // Try with cleaned ID first
+      if (cleanId) {
+        const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+          filter: { column: 'session_id', value: cleanId },
+          order: { column: 'id', ascending: true },
+          limit: 100
+        });
+        console.log('[API] 📱 Query with cleanId returned:', history?.length || 0, 'messages');
 
-    const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
-      // If session_id is the phone number, use that
-      eq: { session_id: phone },
-      order: { column: 'created_at', ascending: false },
-      limit: 20
-    });
+        if (history && history.length > 0) return { history };
+      }
 
-    return { history: history || [] };
+      // Try with raw identifier (in case it's already in the correct format)
+      if (identifier !== cleanId) {
+        const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+          filter: { column: 'session_id', value: identifier },
+          order: { column: 'id', ascending: true },
+          limit: 100
+        });
+        console.log('[API] 📱 Query with raw identifier returned:', history?.length || 0, 'messages');
+
+        if (history && history.length > 0) return { history };
+      }
+
+      // Try partial match using ILIKE
+      const { data: partialMatch } = await supabase
+        .from('vivilo_whatsapp_history')
+        .select('*')
+        .ilike('session_id', `%${cleanId || identifier}%`)
+        .order('id', { ascending: true })
+        .limit(100);
+
+      console.log('[API] 📱 Partial match query returned:', partialMatch?.length || 0, 'messages');
+      if (partialMatch && partialMatch.length > 0) return { history: partialMatch };
+    }
+
+    // 2. Fallback: Search by AI Output content if identifier failed or missing
+    // This is the "Healing Engine" logic
+    if (aiOutput && aiOutput.length > 10) {
+      console.log(`[API] 🩹 Healing linkage: Searching history for content match: "${aiOutput.slice(0, 50)}..."`);
+
+      // Search for the content in message
+      const { data } = await supabase
+        .from('vivilo_whatsapp_history')
+        .select('*')
+        .ilike('message->>content', `%${aiOutput.slice(0, 50)}%`)
+        .order('id', { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        const foundSessionId = data[0].session_id;
+        console.log(`[API] ✅ Linkage healed! Found session_id: ${foundSessionId}`);
+        const fullHistory = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+          filter: { column: 'session_id', value: foundSessionId },
+          order: { column: 'id', ascending: true },
+          limit: 100
+        });
+        return { history: fullHistory || [] };
+      }
+    }
+
+    console.log('[API] ⚠️ No history found for this escalation');
+    return { history: [] };
   }
 
   async resolveEscalation(
@@ -519,16 +682,16 @@ class ApiService {
     const { data, error } = await supabase
       .from('organization_members')
       .select(`
-id,
-  user_id,
-  role,
-  created_at,
-  profiles(
-    full_name,
-    email,
-    phone
-  )
-    `)
+        id,
+        user_id,
+        role,
+        created_at,
+        profiles(
+          full_name,
+          email,
+          phone
+        )
+      `)
       .eq('organization_id', this.organizationId);
 
     if (error) throw error;

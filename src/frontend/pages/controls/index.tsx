@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, MessageSquare, Rocket, Sliders, Shield } from 'lucide-react';
+import { MessageSquare, Rocket, Sliders, Shield } from 'lucide-react';
 
 import {
   AppPage,
@@ -7,7 +7,6 @@ import {
   FormField,
   AppBadge,
   AppButton,
-  AppSwitch,
 } from '@/frontend/components/design-system';
 
 import { api } from '@/backend/api';
@@ -74,14 +73,6 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
     }
   };
 
-  const filteredEngines = React.useMemo(() => {
-    if (!data?.engines) return [];
-    if (!searchTerm) return data.engines;
-    const term = searchTerm.toLowerCase();
-    return data.engines.filter(
-      (e) => e.name.toLowerCase().includes(term) || e.summary.toLowerCase().includes(term)
-    );
-  }, [data?.engines, searchTerm]);
 
   const filteredAddons = React.useMemo(() => {
     if (!data?.addons) return [];
@@ -93,19 +84,12 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
   }, [data?.addons, searchTerm]);
 
   const stats = React.useMemo(() => {
-    const activeEngines = data?.engines?.filter((e) => e.status === 'Active').length || 0;
-    const totalEngines = data?.engines?.length || 1;
 
     const enabledAddons = data?.addons?.filter((a) => a.enabled).length || 0;
     const totalAddons = data?.addons?.length || 1;
     const addonAdoption = Math.round((enabledAddons / totalAddons) * 100);
 
     return [
-      {
-        label: 'Active Engines',
-        value: activeEngines.toString(),
-        sub: `${totalEngines} Universal`,
-      },
       {
         label: 'Add-on Adoption',
         value: `${addonAdoption}%`,
@@ -116,8 +100,13 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
         value: '15 msgs',
         sub: 'Context window'
       },
+      {
+        label: 'System Status',
+        value: 'Online',
+        sub: 'Institutional-v4'
+      },
     ];
-  }, [data?.engines, data?.addons]);
+  }, [data?.addons]);
 
   return (
     <>
@@ -235,47 +224,6 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
 
             {/* RIGHT: ENGINES */}
             <div className="lg:col-span-2 space-y-12">
-              {/* UNIVERSAL ENGINES */}
-              <AppSection
-                title="Universal Engines"
-                subtitle="Core autonomous processes running across all properties."
-                icon={<Cpu size={18} className="text-stone-400" />}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {filteredEngines.map((engine: ControlEngine) => (
-                    <div
-                      key={engine.id}
-                      className="bg-white/60 backdrop-blur-md border border-white/30 rounded-2xl overflow-hidden hover:border-gold-start/30 hover:shadow-premium transition-all duration-300 group"
-                    >
-                      <div className="p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="font-bold text-sm text-stone-900 group-hover:text-gold-start transition-colors">{engine.name}</div>
-                          <AppSwitch
-                            disabled={!canEdit}
-                            checked={engine.status === 'Active'}
-                            onChange={async (checked) => {
-                              try {
-                                await api.updateEngineStatus(engine.id, checked ? 'Active' : 'Paused');
-                                retry();
-                              } catch (e) {
-                                console.error('Failed to update engine status:', e);
-                              }
-                            }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-stone-500 leading-relaxed min-h-[30px]">
-                          {engine.summary}
-                        </p>
-                      </div>
-                      <div className="px-6 py-4 bg-white/40 border-t border-white/20">
-                        <AppBadge variant={engine.status === 'Active' ? 'success' : 'neutral'}>
-                          {engine.status}
-                        </AppBadge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </AppSection>
 
               {/* ADD-ON CATALOG */}
               <AppSection

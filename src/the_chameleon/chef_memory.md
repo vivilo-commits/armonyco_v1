@@ -24,7 +24,23 @@ This log captures specific project "recipes" and lessons to ensure zero-mistake 
 
 ## Data Unification
 - **Hybrid Sources**: When transitioning schemas (e.g., from `executions` to `escalations`), use a unified API accessor that merges both sources in memory and provides a consistent interface to the frontend.
+- **Robust Detection**: Never rely on a single boolean flag (like `human_escalation_triggered`) for critical state. Always check for metadata presence (status, priority, reason) as a fallback to catch data patterns from different automation sources (e.g., n8n). 
+
+## Dashboard & KPI Logic
+- **Consistency is King**: Ensure detection logic is identical across `api.ts` (event mapping), `utils.ts` (KPI cards), and specialized clients (e.g., `n8n-client.ts` for Growth metrics).
+- **Case Sensitivity**: When filtering by status (e.g., 'Resolved'), always use `.toUpperCase()` or defensive normalization to prevent mismatches between database state and UI logic.
 
 ## Debugging Best Practices
 - **Data First, Display Second**: When users report "missing data" in UI, ALWAYS verify data exists in the database first before debugging display/filtering logic. Query the database directly with date ranges and counts to establish ground truth.
+- **Restrictive Filtering Trap**: Avoid strict `eq` filters on status fields (e.g., `eq: { status: 'OPEN' }`) for non-standardized data. Instead, use inclusive logic (e.g., `status !== 'RESOLVED'`) combined with metadata existence checks to ensure no valid records are hidden due to missing or non-standard status strings.
 - **Mock Data Hygiene**: Test/mock data patterns (like `hist-*`, `test-*` prefixes) should be filtered at the query level OR deleted from production databases to prevent inflated counts.
+- **Escalation Linkage Healing**: When metadata is sparse (e.g. execution 17816 with double-stringified or missing phone info), use `ai_output` message content to search `vivilo_whatsapp_history` for the session ID. This "Healing Engine" ensures 100% linkage accuracy despite external data variations.
+- **Robust Parsing**: Always implement a parser that handles double-stringified JSON for `workflow_output` fields from n8n.
+- **Session Deduplication**: When listing interventions, always group by `session_id`/`phone_clean` to avoid duplicate UI entries from multiple triggers in the same conversation.
+- **Persistence First**: Prioritize the dedicated `escalations` table as the "Source of Truth" for status, while using `executions` only for discovery of new triggers.
+- **Accurate KPIs**: For large historical tables (like `vivilo_whatsapp_history`), use exact count queries (`{ count: 'exact', head: true }`) for accuracy instead of relying on limited fetch arrays.
+
+## Robust Linkage & Normalization
+- **Phone Normalization**: Always strip non-numeric characters (except leading +) when matching identifiers (e.g., `phone_clean` vs `session_id`). This ensures reliability across CRM and messaging logs.
+- **Deep Metadata Extraction**: In automation scenarios (e.g., n8n), don't trust top-level status flags alone if `workflow_output` or similar JSONB data exists. Look deep into tool outputs to reconstruct state.
+- **Visual Highlighting**: Pass specific triggering IDs (`message_id`) to the UI to provide immediate context in detailed views, reducing operator cognitive load.

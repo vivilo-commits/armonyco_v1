@@ -45,9 +45,10 @@ export function calculateDashboardKPIs(
     // otherwise fall back to the legacy calculation from executions
     const openEscalations = openEscalationsCount !== undefined
         ? openEscalationsCount
-        : (cashflow
-            ? (cashflow.escalations_avoided ? 0 : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length)
-            : executions.filter((e) => e.human_escalation_triggered && e.escalation_status !== 'Resolved').length);
+        : executions.filter((e) =>
+            (e.human_escalation_triggered || e.escalation_status || e.escalation_priority) &&
+            e.escalation_status?.toUpperCase() !== 'RESOLVED'
+        ).length;
 
     // ✅ FIX: Only calculate latency for FINISHED executions
     const latencies = finishedExecutions
@@ -300,6 +301,15 @@ export function calculateGrowthKPIs(_executions: Execution[], cashflowTransactio
 }
 
 // FORMATTING & NORMALIZERS
+export function normalizePhone(phone: string): string {
+    if (!phone) return '';
+    // Strip everything except numbers and leading +
+    const cleaned = phone.replace(/[^\d+]/g, '');
+    // If it starts with +39 or 39, ensure consistency (business logic specific)
+    // For now, just return the cleaned digits to match vivilo_whatsapp_history session_id format
+    return cleaned.replace(/^\+/, '');
+}
+
 export function normalizeColumnName(name: string): string {
     return name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 }

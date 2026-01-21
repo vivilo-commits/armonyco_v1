@@ -82,7 +82,7 @@ export async function getGovernedCashflowData(
 ): Promise<GovernedCashflowData> {
   // Calculate metrics from executions data
   const totalRevenue = executions.reduce((sum, exec) => sum + (exec.value_captured || 0), 0);
-  
+
   const upsellOffers = executions.filter(e => e.upsell_offered).length;
   const upsellAccepted = executions.filter(e => e.upsell_accepted).length;
   const upsellAcceptanceRate = upsellOffers > 0 ? (upsellAccepted / upsellOffers) * 100 : 0;
@@ -113,7 +113,7 @@ export async function getGovernedCashflowData(
   ) / 3600; // Convert seconds to hours
 
   const escalationsAvoided = executions.filter(
-    e => !e.human_escalation_triggered
+    e => !(e.human_escalation_triggered || e.escalation_status || e.escalation_priority)
   ).length;
 
   return {
