@@ -130,9 +130,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
           filter: none !important;
         }
         .architecture-card:hover .architecture-icon {
-          background: #f5d47c !important;
-          color: #1a1a1a !important;
-          box-shadow: 0 0 30px rgba(245, 212, 124, 0.6) !important;
+          background: #1a1a1a !important;
+          color: #f5d47c !important;
+          box-shadow: 0 0 30px rgba(245, 212, 124, 0.2) !important;
+          border-color: #f5d47c !important;
         }
         .architecture-icon-container {
           position: relative;
@@ -484,31 +485,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
                 id: 'AEM',
                 title: 'Armonyco Event Model™',
                 desc: 'Autonomous general reasoning to comprehend flexible request types in hospitality.',
-                icon: <Activity size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon group-hover:text-stone-900 group-hover:fill-stone-900" />,
+                icon: <Activity size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon transition-colors" />,
               },
               {
                 id: 'ASRS',
                 title: 'Armonyco Reliability System™',
                 desc: 'Decentralized Execution Core with Proof-of-Control auditability.',
-                icon: <ShieldCheck size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon group-hover:text-stone-900 group-hover:fill-stone-900" />,
+                icon: <ShieldCheck size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon transition-colors" />,
               },
               {
                 id: 'AOS',
                 title: 'Armonyco Operating System™',
                 desc: 'The orchestration layer for standardized, high-performance hospitality protocols.',
-                icon: <Cpu size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon group-hover:text-stone-900 group-hover:fill-stone-900" />,
+                icon: <Cpu size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon transition-colors" />,
               },
               {
                 id: 'AIM',
                 title: 'Armonyco Intelligence Matrix™',
                 desc: '4-Agent Harmony ensuring every action is verified for accuracy.',
-                icon: <Zap size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon group-hover:text-stone-900 group-hover:fill-stone-900" />,
+                icon: <Zap size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon transition-colors" />,
               },
               {
                 id: 'AGS',
                 title: 'Armonyco Governance Scorecard™',
                 desc: 'Final verification and ROI measurement layer for stakeholders.',
-                icon: <BarChart3 size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon group-hover:text-stone-900 group-hover:fill-stone-900" />,
+                icon: <BarChart3 size={24} color="#f5d47c" strokeWidth={2.5} fill="#f5d47c" fillOpacity={0.4} className="force-gold-icon transition-colors" />,
               },
             ].map((item, i) => (
               <div
@@ -617,7 +618,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
 
                 {/* Icon */}
                 <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center mb-8 shadow-lg shrink-0 transition-all duration-300 ${isPopular ? 'gold-gradient text-stone-900 shadow-gold-glow' : 'bg-stone-900 text-white group-hover:gold-gradient group-hover:text-stone-900 group-hover:shadow-gold-glow'}`}
+                  className={`w-12 h-12 rounded-xl flex items-center justify-center mb-8 shadow-lg shrink-0 transition-all duration-300 ${isPopular ? 'gold-gradient text-stone-900 shadow-gold-glow' : 'bg-stone-900 text-[#f5d47c] group-hover:border group-hover:border-[#f5d47c] group-hover:shadow-gold-glow'}`}
                 >
                   {icons[i]}
                 </div>
