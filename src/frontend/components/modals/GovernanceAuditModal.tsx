@@ -259,16 +259,35 @@ export const GovernanceAuditModal: React.FC<GovernanceAuditModalProps> = ({
             <style dangerouslySetInnerHTML={{
                 __html: `
         @media print {
-          body { visibility: hidden; }
+          body { 
+            visibility: hidden; 
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          #audit-document, #audit-document * { 
+            visibility: visible !important; 
+          }
           #audit-document { 
-            visibility: visible; 
             position: absolute; 
             left: 0; 
             top: 0; 
             width: 100%;
-            padding: 40px;
+            padding: 20mm;
+            background: white !important;
           }
-          .custom-scrollbar { overflow: visible !important; }
+          /* Fix specific surfaces for print */
+          .bg-stone-900 { background-color: #1c1917 !important; color: white !important; }
+          .bg-stone-50 { background-color: #fafaf9 !important; }
+          .gold-gradient { background: linear-gradient(to right, #D4AF37, #F9D71C) !important; }
+          .text-gold-start { color: #D4AF37 !important; }
+          .text-white { color: white !important; }
+          
+          /* Remove shadows for cleaner print */
+          .shadow-xl, .shadow-2xl, .shadow-md { shadow: none !important; box-shadow: none !important; }
+          
+          @page {
+            margin: 0;
+          }
         }
       `}} />
         </BaseModal>
