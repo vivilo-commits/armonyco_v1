@@ -26,7 +26,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
   escalation,
   onResolved,
 }) => {
-  const { canEdit } = useAuth();
+  const { canEdit, user, profile } = useAuth();
   const [showProofForm, setShowProofForm] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [history, setHistory] = React.useState<WhatsAppHistory[]>([]);
@@ -72,10 +72,23 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
     setIsSaving(true);
     setSaveStatus('idle');
     try {
-      await api.updateEscalation(escalation.id, {
-        escalation_resolution_notes: formData.notes,
-        escalation_priority: formData.classification,
-      });
+      // Determine which table the escalation came from
+      // If execution_id differs from id, it's from the escalations table
+      const isFromEscalationsTable = escalation.execution_id && escalation.execution_id !== escalation.id;
+
+      if (isFromEscalationsTable) {
+        // Update escalations table with its field names
+        await api.updateEscalation(escalation.id, {
+          resolution_notes: formData.notes,
+          priority: formData.classification,
+        }, 'escalations');
+      } else {
+        // Update executions table with its field names
+        await api.updateEscalation(escalation.id, {
+          escalation_priority: formData.classification,
+          human_escalation_reason: formData.notes || escalation.reason,
+        }, 'executions');
+      }
       setSaveStatus('success');
       setTimeout(() => setSaveStatus('idle'), 3000);
     } catch (e) {
@@ -90,15 +103,22 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
     if (!escalation) return;
     setIsSubmitting(true);
     try {
-      // Get user context - we'll use supabase auth to get current user
-      const { data: { user } } = await import('@/database/supabase').then(m => m.supabase.auth.getUser());
+      // Use profile from AuthContext - full_name is set in Settings
+      const resolverName = profile?.full_name || user?.email || 'System Operator';
 
       await api.resolveEscalation(
         escalation.id,
         formData.notes,
         formData.classification,
         user?.id,
-        user?.user_metadata?.full_name || user?.email
+        resolverName,
+        // Pass additional data for escalations table
+        {
+          phone_clean: escalation.phone_clean,
+          reason: escalation.reason || escalation.metadata?.reason,
+          workflow: escalation.metadata?.workflow,
+          trigger_message: escalation.metadata?.trigger_message,
+        }
       );
       onResolved?.();
       onClose();

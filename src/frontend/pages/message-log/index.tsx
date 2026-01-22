@@ -256,8 +256,20 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                   </div>
 
                   <div className="pl-14 relative">
-                    {/* Escalation Badge in List */}
-                    {openEscalations.some(e => e.phone_clean === conv.id) && (
+                    {/* Escalation Badge in List - Match by phone_clean, session_id, or partial content */}
+                    {openEscalations.some(e => {
+                      // Check if escalation matches this conversation by any identifier
+                      const convIdLower = conv.id.toLowerCase();
+                      const phoneClean = e.phone_clean?.toLowerCase() || '';
+                      const sessionId = e.metadata?.session_id?.toLowerCase() || '';
+
+                      return (
+                        phoneClean === convIdLower ||
+                        sessionId === convIdLower ||
+                        (phoneClean && convIdLower.includes(phoneClean)) ||
+                        (phoneClean && phoneClean.includes(convIdLower.slice(-9))) // Last 9 digits of phone
+                      );
+                    }) && (
                       <div className="absolute right-0 top-0">
                         <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse" title="Active Escalation" />
                       </div>
@@ -291,6 +303,31 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                 {selectedConv.messages.map((msg: Message) => {
                   const isAgent =
                     msg.sender === 'agent' || msg.sender === 'host' || msg.sender === 'system';
+
+                  // Check if this message triggered an escalation by matching MESSAGE CONTENT
+                  // Compare with all open escalations' trigger_message, ai_output, or reason
+                  const findEscalationByMessage = () => {
+                    if (isAgent || !msg.text) return null;
+                    const msgLower = msg.text.toLowerCase().trim();
+                    const msgFirst50 = msgLower.substring(0, 50);
+
+                    return openEscalations.find(esc => {
+                      const trigger = esc.metadata?.trigger_message?.toLowerCase()?.trim();
+                      const aiOutput = esc.metadata?.ai_output?.toLowerCase()?.trim();
+                      const reason = (esc.reason || esc.metadata?.reason)?.toLowerCase()?.trim();
+
+                      // Match if message content overlaps with escalation data
+                      return (
+                        (trigger && (msgLower.includes(trigger) || trigger.includes(msgFirst50))) ||
+                        (aiOutput && msgLower.includes(aiOutput.substring(0, 30))) ||
+                        (reason && msgLower.includes(reason.substring(0, 30)))
+                      );
+                    });
+                  };
+
+                  const matchedEscalation = findEscalationByMessage();
+                  const isEscalatedMessage = !!matchedEscalation;
+
                   if (msg.type === 'separator' || msg.type === 'system_notice') {
                     return (
                       <div key={msg.id} className="flex justify-center my-4">
@@ -303,9 +340,25 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} gap-1 animate-in slide-in-from-bottom-4`}
+                      className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} gap-1 animate-in slide-in-from-bottom-4 ${isEscalatedMessage ? 'relative' : ''}`}
                     >
-                      {!isAgent && (
+                      {/* Escalation Warning Badge */}
+                      {isEscalatedMessage && matchedEscalation && (
+                        <div
+                          className="flex items-center gap-2 mb-2 ml-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-full cursor-pointer hover:bg-red-100 transition-colors"
+                          onClick={() => {
+                            setActiveEscalation(matchedEscalation);
+                            setShowEscalation(true);
+                          }}
+                        >
+                          <AlertTriangle size={12} className="text-red-500 animate-pulse" />
+                          <span className="text-[10px] font-black text-red-600 uppercase tracking-wide">
+                            Escalated • Click to resolve
+                          </span>
+                        </div>
+                      )}
+
+                      {!isAgent && !isEscalatedMessage && (
                         <div className="flex items-center gap-2 mb-1 ml-2">
                           <div className="w-1.5 h-1.5 rounded-full gold-gradient shadow-gold-glow animate-pulse" />
                           <span className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em]">
@@ -316,19 +369,28 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
 
                       <div className={`flex ${isAgent ? 'flex-row-reverse' : ''} gap-5 w-full`}>
                         <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-1 shadow-md transition-transform hover:scale-105 duration-300 ${isAgent ? 'bg-stone-900 text-white' : 'bg-white border border-stone-100 text-stone-500'}`}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-1 shadow-md transition-transform hover:scale-105 duration-300 ${
+                            isEscalatedMessage
+                              ? 'bg-red-500 text-white ring-2 ring-red-300 ring-offset-2'
+                              : isAgent
+                                ? 'bg-stone-900 text-white'
+                                : 'bg-white border border-stone-100 text-stone-500'
+                          }`}
                         >
-                          {isAgent ? 'A' : selectedConv.initials}
+                          {isEscalatedMessage ? <AlertTriangle size={16} /> : isAgent ? 'A' : selectedConv.initials}
                         </div>
 
                         <div
                           className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} max-w-[75%]`}
                         >
                           <div
-                            className={`px-7 py-5 rounded-[2.5rem] text-[0.90rem] leading-relaxed shadow-premium-sm transition-all hover:shadow-premium ${isAgent
-                              ? 'bg-stone-900 text-white rounded-tr-none border border-stone-800'
-                              : 'bg-transparent border-2 border-stone-200 text-stone-800 rounded-tl-none font-medium italic'
-                              }`}
+                            className={`px-7 py-5 rounded-[2.5rem] text-[0.90rem] leading-relaxed shadow-premium-sm transition-all hover:shadow-premium ${
+                              isEscalatedMessage
+                                ? 'bg-red-50 border-2 border-red-300 text-red-900 rounded-tl-none font-medium shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                                : isAgent
+                                  ? 'bg-stone-900 text-white rounded-tr-none border border-stone-800'
+                                  : 'bg-transparent border-2 border-stone-200 text-stone-800 rounded-tl-none font-medium italic'
+                            }`}
                           >
                             {msg.text?.split(/(\*\*.*?\*\*)/g).map((part: string, i: number) =>
                               part.startsWith('**') && part.endsWith('**') ? (
@@ -350,6 +412,15 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                                 <span className="text-[9px] text-gold-gradient font-bold uppercase tracking-widest flex items-center gap-1.5">
                                   <ShieldCheck size={10} />
                                   Institutional Execution
+                                </span>
+                              </>
+                            )}
+                            {isEscalatedMessage && (
+                              <>
+                                <div className="w-1 h-1 rounded-full bg-red-400" />
+                                <span className="text-[9px] text-red-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                                  <AlertTriangle size={10} />
+                                  Human Review Required
                                 </span>
                               </>
                             )}
@@ -375,12 +446,32 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
             )}
 
             {/* ACTIVE ESCALATION FLOATING NOTIFICATION */}
-            {selectedConv && openEscalations.find(e => e.phone_clean === selectedConv.id) && (
+            {selectedConv && openEscalations.find(e => {
+              const convIdLower = selectedConv.id.toLowerCase();
+              const phoneClean = e.phone_clean?.toLowerCase() || '';
+              const sessionId = e.metadata?.session_id?.toLowerCase() || '';
+              return (
+                phoneClean === convIdLower ||
+                sessionId === convIdLower ||
+                (phoneClean && convIdLower.includes(phoneClean)) ||
+                (phoneClean && phoneClean.includes(convIdLower.slice(-9)))
+              );
+            }) && (
               <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 animate-in zoom-in duration-300">
                 <div
                   className="px-6 py-3 shadow-2xl border-red-500/20 bg-stone-900/90 backdrop-blur-md rounded-2xl flex items-center gap-4 cursor-pointer hover:scale-105 transition-transform"
                   onClick={() => {
-                    const esc = openEscalations.find(e => e.phone_clean === selectedConv.id);
+                    const convIdLower = selectedConv.id.toLowerCase();
+                    const esc = openEscalations.find(e => {
+                      const phoneClean = e.phone_clean?.toLowerCase() || '';
+                      const sessionId = e.metadata?.session_id?.toLowerCase() || '';
+                      return (
+                        phoneClean === convIdLower ||
+                        sessionId === convIdLower ||
+                        (phoneClean && convIdLower.includes(phoneClean)) ||
+                        (phoneClean && phoneClean.includes(convIdLower.slice(-9)))
+                      );
+                    });
                     if (esc) {
                       setActiveEscalation(esc);
                       setShowEscalation(true);

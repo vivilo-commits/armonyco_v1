@@ -203,7 +203,7 @@ class ApiService {
 
     const kpis = calculateDashboardKPIs(
       safeExecutions,
-      trueMessageCount || 0,
+      trueMessageCount ?? 0,
       {
         total_revenue: cashflowAgg.total_revenue,
         executions_count: cashflowAgg.transaction_count,
@@ -243,6 +243,16 @@ class ApiService {
       limit: 1000,
     });
 
+    // Fetch escalation metrics from escalations table
+    const escalationsData = await this.supabaseFetch<Escalation[]>('escalations', {
+      order: { column: 'created_at', ascending: false },
+      limit: 500,
+    });
+
+    const safeEscalations = escalationsData || [];
+    const resolvedEscalations = safeEscalations.filter(e => e.status === 'RESOLVED');
+    const openEscalations = safeEscalations.filter(e => e.status === 'OPEN');
+
     // Calculate KPIs using both sources (cashflow is primary while executions is empty)
     const kpis = calculateGrowthKPIs(executions || [], cashflowTransactions || []);
 
@@ -255,22 +265,45 @@ class ApiService {
       .slice(0, 10)
       .map((tx) => ({
         id: tx.code || tx.id.slice(0, 8),
-        title: `${tx.guest} - ${tx.code} `,
+        title: `${tx.guest} - ${tx.code}`,
         value: tx.total_amount,
         date: tx.collection_date || new Date(tx.created_at).toLocaleDateString(),
         status: 'Captured' as 'Approved' | 'Captured' | 'Verified',
       }));
 
+    // Calculate real metrics
+    const safeExecutions = executions || [];
+    const finishedExecutions = safeExecutions.filter(e => e.finished);
+    const totalHoursSaved = safeExecutions.reduce((sum, e) => sum + (e.time_saved_seconds || 0), 0) / 3600;
+    const automationRate = finishedExecutions.length > 0
+      ? Math.round((finishedExecutions.filter(e => !e.human_escalation_triggered).length / finishedExecutions.length) * 100)
+      : 0;
+
     const valueCreated = [
-      { label: 'Hours Saved', value: '12h' },
-      { label: 'Escalations Avoided', value: '3' },
-      { label: 'Response Time', value: '< 2min' },
-      { label: 'Automation Rate', value: '87%' },
-      { label: 'Guest Satisfaction', value: '94%' },
-      { label: 'Cost Savings', value: '€ 450,00' },
+      { label: 'Hours Saved', value: `${totalHoursSaved.toFixed(1)}h` },
+      { label: 'Escalations Resolved', value: String(resolvedEscalations.length) },
+      { label: 'Escalations Open', value: String(openEscalations.length) },
+      { label: 'Automation Rate', value: `${automationRate}%` },
+      { label: 'Total Escalations', value: String(safeEscalations.length) },
+      { label: 'Resolution Rate', value: safeEscalations.length > 0 ? `${Math.round((resolvedEscalations.length / safeEscalations.length) * 100)}%` : '0%' },
     ];
 
-    return { kpis, wins, valueCreated };
+    // Add escalation summary
+    const escalationSummary = {
+      total: safeEscalations.length,
+      open: openEscalations.length,
+      resolved: resolvedEscalations.length,
+      resolutionRate: safeEscalations.length > 0 ? Math.round((resolvedEscalations.length / safeEscalations.length) * 100) : 0,
+      recentResolutions: resolvedEscalations.slice(0, 5).map(e => ({
+        id: e.id,
+        phone: e.phone_clean,
+        reason: e.reason || e.metadata?.reason,
+        resolvedAt: e.resolved_at,
+        resolvedBy: e.resolved_by_name || e.metadata?.resolved_by_name,
+      })),
+    };
+
+    return { kpis, wins, valueCreated, escalationSummary };
   }
 
   // --- Controls Data ---
@@ -296,38 +329,38 @@ class ApiService {
   }
 
   async updateAddonStatus(id: string, enabled: boolean) {
-    const url = `${SUPABASE_URL} /rest/v1 / addons ? id = eq.${id}& organization_id=eq.${this.organizationId} `;
+    const url = `${SUPABASE_URL}/rest/v1/addons?id=eq.${id}&organization_id=eq.${this.organizationId}`;
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY} `,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ enabled })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update addon: ${response.status} `);
+      throw new Error(`Failed to update addon: ${response.status}`);
     }
     return response.json();
   }
 
   async updateIntelligenceMode(mode: string) {
     // Assuming settings table has organization_id column or we update the single row
-    const url = `${SUPABASE_URL} /rest/v1 / settings ? organization_id = eq.${this.organizationId} `;
+    const url = `${SUPABASE_URL}/rest/v1/settings?organization_id=eq.${this.organizationId}`;
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY} `,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ intelligence_mode: mode })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update intelligence mode: ${response.status} `);
+      throw new Error(`Failed to update intelligence mode: ${response.status}`);
     }
     return response.json();
   }
@@ -338,37 +371,37 @@ class ApiService {
     formality_level: string;
     brand_keywords: string;
   }) {
-    const url = `${SUPABASE_URL} /rest/v1 / settings ? organization_id = eq.${this.organizationId} `;
+    const url = `${SUPABASE_URL}/rest/v1/settings?organization_id=eq.${this.organizationId}`;
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY} `,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(settings)
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update general settings: ${response.status} `);
+      throw new Error(`Failed to update general settings: ${response.status}`);
     }
     return response.json();
   }
 
   async updateEngineStatus(id: string, status: 'Active' | 'Paused') {
-    const url = `${SUPABASE_URL} /rest/v1 / engines ? id = eq.${id}& organization_id=eq.${this.organizationId} `;
+    const url = `${SUPABASE_URL}/rest/v1/engines?id=eq.${id}&organization_id=eq.${this.organizationId}`;
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY} `,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ status })
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update engine status: ${response.status} `);
+      throw new Error(`Failed to update engine status: ${response.status}`);
     }
     return response.json();
   }
@@ -458,7 +491,20 @@ class ApiService {
           workflowData?.message_id || '';
 
         const aiOutput = workflowData?.ai_output || workflowData?.message || '';
-        const triggerMessage = workflowData?.trigger_message || workflowData?.escalation?.trigger_message || '';
+
+        // Extract trigger message from multiple possible locations in workflow_output
+        // Priority: explicit trigger_message > last_message > ai response > guest message
+        const triggerMessage =
+          workflowData?.trigger_message ||
+          workflowData?.escalation?.trigger_message ||
+          workflowData?.last_message ||
+          workflowData?.last_human_message ||
+          workflowData?.guest_message ||
+          workflowData?.channel?.last_message ||
+          workflowData?.ai?.response_preview ||
+          workflowData?.human_escalation_reason ||
+          exec.human_escalation_reason ||
+          '';
 
         const safePhone = workflowData?.guest?.phone || sessionId || '';
         const phoneClean = typeof safePhone === 'string' ? normalizePhone(safePhone) : '';
@@ -469,6 +515,15 @@ class ApiService {
           workflowData?.escalation_status?.toUpperCase() === 'RESOLVED'
         ) ? 'RESOLVED' : 'OPEN';
 
+        // Extract resolved_by_name from human_escalation_reason if present
+        // Format: "[RESOLVED by NAME] notes" or "[RESOLVED by NAME]"
+        let resolvedByName: string | undefined;
+        const reasonText = exec.human_escalation_reason || '';
+        const resolvedMatch = reasonText.match(/\[RESOLVED by ([^\]]+)\]/i);
+        if (resolvedMatch) {
+          resolvedByName = resolvedMatch[1].trim();
+        }
+
         return {
           id: exec.execution_id,
           phone_clean: phoneClean || exec.execution_id,
@@ -477,6 +532,8 @@ class ApiService {
           priority: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'LOW'),
           classification: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'M1'),
           reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.escalation?.reason || 'Human interaction requested',
+          resolved_by_name: resolvedByName,
+          resolved_at: resolvedStatus === 'RESOLVED' ? exec.updated_at : undefined,
           organization_id: exec.organization_id || this.organizationId || '',
           created_at: exec.created_at || new Date().toISOString(),
           updated_at: exec.updated_at || new Date().toISOString(),
@@ -488,7 +545,8 @@ class ApiService {
             workflow: exec.workflow_name || 'System',
             risk_type: normalizeRiskLevel(workflowData?.risk?.type),
             score: workflowData?.risk?.score || 0,
-            reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.escalation?.reason
+            reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.escalation?.reason,
+            resolved_by_name: resolvedByName,
           }
         };
       });
@@ -628,39 +686,194 @@ class ApiService {
     notes: string,
     classification: string,
     userId?: string,
-    userName?: string
+    userName?: string,
+    escalationData?: {
+      phone_clean?: string;
+      reason?: string;
+      workflow?: string;
+      trigger_message?: string;
+    }
   ) {
     // Determine if the ID is a UUID (likely 'escalations' table) or a number string (likely 'executions' table)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    const table = isUuid ? 'escalations' : 'executions';
+    const isFromExecutions = !isUuid;
 
-    const updates = isUuid ? {
-      status: 'RESOLVED',
-      resolution_notes: notes,
-      classification: classification,
-      resolved_by: userId,
-      resolved_by_name: userName,
-      resolved_at: new Date().toISOString(),
-    } : {
-      escalation_status: 'RESOLVED',
-      escalation_resolution_notes: notes,
-      escalation_priority: classification,
-      escalation_assigned_to: userId,
-      escalation_resolved_by_name: userName,
-      escalation_resolved_at: new Date().toISOString(),
+    const resolvedAt = new Date().toISOString();
+
+    // 1. If from executions table, update it
+    if (isFromExecutions) {
+      await this.updateEscalation(id, {
+        escalation_status: 'RESOLVED',
+        escalation_priority: classification,
+        human_escalation_reason: notes ? `[RESOLVED by ${userName || 'operator'}] ${notes}` : undefined,
+      }, 'executions');
+    }
+
+    // 2. Always persist to escalations table
+    const phoneClean = escalationData?.phone_clean || id;
+    const orgId = this.organizationId;
+
+    console.log('[API] resolveEscalation - Persisting to escalations table:', {
+      phoneClean,
+      orgId,
+      userId,
+      userName,
+      hasEscalationData: !!escalationData
+    });
+
+    // Skip if no organization_id
+    if (!orgId) {
+      console.error('[API] Cannot persist escalation: organization_id is null');
+      return { success: true }; // Still return success for the executions update
+    }
+
+    // First check if escalation already exists for this phone/org
+    const { data: existing, error: selectError } = await supabase
+      .from('escalations')
+      .select('id')
+      .eq('phone_clean', phoneClean)
+      .eq('organization_id', orgId)
+      .maybeSingle();
+
+    if (selectError) {
+      console.error('[API] Error checking existing escalation:', selectError);
+    }
+
+    const escalationRecord = {
+      execution_id: isFromExecutions ? id : phoneClean,
+      phone_clean: phoneClean,
+      status: 'RESOLVED' as const,
+      priority: classification || 'M1',
+      reason: escalationData?.reason || notes || 'Resolved via UI',
+      resolution_notes: notes || '',
+      resolved_by: userId || null,
+      resolved_by_name: userName || 'System',
+      resolved_at: resolvedAt,
+      organization_id: orgId,
+      metadata: {
+        workflow: escalationData?.workflow || 'System',
+        trigger_message: escalationData?.trigger_message || '',
+        resolved_by_name: userName || 'System',
+      },
+      updated_at: resolvedAt,
     };
 
-    return this.updateEscalation(id, updates, table);
+    console.log('[API] Escalation record to persist:', escalationRecord);
+
+    if (existing?.id) {
+      // Update existing record
+      console.log('[API] Updating existing escalation:', existing.id);
+      const { error: updateError } = await supabase
+        .from('escalations')
+        .update(escalationRecord)
+        .eq('id', existing.id);
+
+      if (updateError) {
+        console.error('[API] Failed to update escalation record:', JSON.stringify(updateError));
+      } else {
+        console.log('[API] Successfully updated escalation in Supabase');
+      }
+    } else {
+      // Insert new record
+      console.log('[API] Inserting new escalation record for:', phoneClean);
+      const { data: insertData, error: insertError } = await supabase
+        .from('escalations')
+        .insert({
+          ...escalationRecord,
+          created_at: resolvedAt,
+        })
+        .select();
+
+      if (insertError) {
+        console.error('[API] Failed to insert escalation record:', JSON.stringify(insertError));
+        console.error('[API] Insert error details:', insertError.message, insertError.details, insertError.hint);
+      } else {
+        console.log('[API] Successfully inserted escalation to Supabase:', insertData);
+      }
+    }
+
+    // 3. If originally from escalations table, also update it directly
+    if (!isFromExecutions) {
+      await this.updateEscalation(id, {
+        status: 'RESOLVED',
+        resolution_notes: notes,
+        priority: classification,
+        resolved_by: userId,
+        resolved_by_name: userName,
+        resolved_at: resolvedAt,
+      }, 'escalations');
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Manually insert a resolved escalation to Supabase
+   * Use this to backfill escalations that weren't persisted
+   */
+  async insertResolvedEscalation(data: {
+    phone_clean: string;
+    execution_id?: string;
+    reason: string;
+    resolution_notes: string;
+    resolved_by_name: string;
+    resolved_at?: string;
+    workflow?: string;
+  }) {
+    const orgId = this.organizationId;
+    if (!orgId) {
+      console.error('[API] Cannot insert escalation: organization_id is null');
+      return { success: false, error: 'No organization_id' };
+    }
+
+    const now = data.resolved_at || new Date().toISOString();
+
+    const record = {
+      phone_clean: data.phone_clean,
+      execution_id: data.execution_id || data.phone_clean,
+      status: 'RESOLVED' as const,
+      priority: 'M1',
+      reason: data.reason,
+      resolution_notes: data.resolution_notes,
+      resolved_by: null,
+      resolved_by_name: data.resolved_by_name,
+      resolved_at: now,
+      organization_id: orgId,
+      metadata: {
+        workflow: data.workflow || 'System',
+        resolved_by_name: data.resolved_by_name,
+        manually_inserted: true,
+      },
+      created_at: now,
+      updated_at: now,
+    };
+
+    console.log('[API] Manually inserting escalation:', record);
+
+    const { data: insertData, error } = await supabase
+      .from('escalations')
+      .insert(record)
+      .select();
+
+    if (error) {
+      console.error('[API] Failed to insert escalation:', JSON.stringify(error));
+      return { success: false, error: error.message };
+    }
+
+    console.log('[API] Successfully inserted escalation:', insertData);
+    return { success: true, data: insertData };
   }
 
   async updateEscalation(id: string, updates: any, table: 'executions' | 'escalations' = 'executions') {
-    const url = `${SUPABASE_URL} /rest/v1 / ${table}?id = eq.${id}& organization_id=eq.${this.organizationId} `;
+    // Use correct primary key column for each table
+    const idColumn = table === 'executions' ? 'execution_id' : 'id';
+    const url = `${SUPABASE_URL}/rest/v1/${table}?${idColumn}=eq.${id}&organization_id=eq.${this.organizationId}`;
 
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY} `,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
         'Prefer': 'return=representation'
       },
@@ -671,7 +884,9 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update ${table}: ${response.status} `);
+      const errorText = await response.text();
+      console.error(`[API] Update ${table} failed:`, response.status, errorText);
+      throw new Error(`Failed to update ${table}: ${response.status}`);
     }
 
     return response.json();
@@ -699,41 +914,46 @@ class ApiService {
   }
 
   async createSubAccount(email: string, password: string, fullName: string, role: string = 'viewer') {
-    // Note: Creating accounts usually requires administrative privileges or a backend trigger/Edge Function.
-    // For this context, we'll try standard signUp. 
-    // IMPORTANT: In production, use Supabase Auth Admin via an Edge Function to avoid signing the current admin out.
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        }
-      }
+    // Use Edge Function for secure user creation
+    // Benefits: bypasses rate limits, auto-confirms email, doesn't log out current user
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('You must be logged in to create team members');
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/create-team-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+        'apikey': SUPABASE_ANON_KEY
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        full_name: fullName,
+        role,
+        organization_id: this.organizationId
+      })
     });
 
-    if (authError) throw authError;
+    const result = await response.json();
 
-    // Link to organization
-    const { error: memberError } = await supabase
-      .from('organization_members')
-      .insert({
-        user_id: authData.user?.id,
-        organization_id: this.organizationId,
-        role
-      });
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || 'Failed to create team member');
+    }
 
-    if (memberError) throw memberError;
-    return { success: true };
+    return result;
   }
 
   async updateAutoTopup(enabled: boolean, threshold: number, amount: number) {
-    const url = `${SUPABASE_URL} /rest/v1 / organization_entitlements ? organization_id = eq.${this.organizationId} `;
+    const url = `${SUPABASE_URL}/rest/v1/organization_entitlements?organization_id=eq.${this.organizationId}`;
     const response = await fetch(url, {
       method: 'PATCH',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY} `,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -744,7 +964,7 @@ class ApiService {
     });
 
     if (!response.ok) {
-      throw new Error(`Failed to update auto top - up: ${response.status} `);
+      throw new Error(`Failed to update auto top-up: ${response.status}`);
     }
     return response.json();
   }

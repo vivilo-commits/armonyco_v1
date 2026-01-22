@@ -142,6 +142,11 @@ export const Settings: React.FC = () => {
       setTimeout(() => setSaveMessage(''), 3000);
       return;
     }
+    if (newPassword.length < 6) {
+      setSaveMessage('Password must be at least 6 characters');
+      setTimeout(() => setSaveMessage(''), 3000);
+      return;
+    }
     setCreating(true);
     try {
       await api.createSubAccount(newEmail, newPassword, newFullName, newRole);
@@ -152,10 +157,23 @@ export const Settings: React.FC = () => {
       setSaveMessage('Account created successfully!');
     } catch (e: any) {
       console.error('Create error:', e);
-      setSaveMessage(e.message || 'Failed to create account');
+      // Parse specific error types
+      const errorMsg = e.message || '';
+      if (errorMsg.includes('429') || errorMsg.includes('security purposes')) {
+        // Extract wait time if present
+        const waitMatch = errorMsg.match(/after (\d+) seconds/);
+        const waitTime = waitMatch ? waitMatch[1] : '60';
+        setSaveMessage(`Rate limited. Please wait ${waitTime} seconds and try again.`);
+      } else if (errorMsg.includes('403') || errorMsg.includes('forbidden')) {
+        setSaveMessage('Permission denied. Check Supabase auth settings.');
+      } else if (errorMsg.includes('already registered') || errorMsg.includes('already exists')) {
+        setSaveMessage('This email is already registered.');
+      } else {
+        setSaveMessage(errorMsg || 'Failed to create account');
+      }
     } finally {
       setCreating(false);
-      setTimeout(() => setSaveMessage(''), 3000);
+      setTimeout(() => setSaveMessage(''), 5000);
     }
   };
 
@@ -488,47 +506,46 @@ export const Settings: React.FC = () => {
                       {['owner', 'admin'].includes(membership?.role?.toLowerCase() || '') && (
                         <div className="bg-white p-6 rounded-2xl border border-stone-200 space-y-4 mb-6">
                           <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Create New Member</p>
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          <div className="flex flex-col lg:flex-row gap-3 items-stretch">
                             <input
                               type="text"
                               placeholder="Full Name"
                               value={newFullName}
                               onChange={(e) => setNewFullName(e.target.value)}
-                              className="px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                              className="flex-1 min-w-0 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
                             />
                             <input
                               type="email"
                               placeholder="Email Address"
                               value={newEmail}
                               onChange={(e) => setNewEmail(e.target.value)}
-                              className="px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                              className="flex-1 min-w-0 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
                             />
                             <input
                               type="password"
                               placeholder="Password"
                               value={newPassword}
                               onChange={(e) => setNewPassword(e.target.value)}
-                              className="px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                              className="flex-1 min-w-0 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
                             />
-                            <div className="flex gap-2">
-                              <select
-                                value={newRole}
-                                onChange={(e) => setNewRole(e.target.value)}
-                                className="flex-1 px-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
-                              >
-                                <option value="viewer">Viewer (Read-only)</option>
-                                <option value="manager">Manager</option>
-                                <option value="admin">Admin</option>
-                              </select>
-                              <AppButton
-                                size="sm"
-                                icon={<Plus size={14} />}
-                                onClick={handleCreateSubAccount}
-                                loading={creating}
-                              >
-                                Create
-                              </AppButton>
-                            </div>
+                            <select
+                              value={newRole}
+                              onChange={(e) => setNewRole(e.target.value)}
+                              className="lg:w-40 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                            >
+                              <option value="viewer">Viewer</option>
+                              <option value="manager">Manager</option>
+                              <option value="admin">Admin</option>
+                            </select>
+                            <AppButton
+                              size="sm"
+                              icon={<Plus size={14} />}
+                              onClick={handleCreateSubAccount}
+                              loading={creating}
+                              className="lg:w-auto whitespace-nowrap"
+                            >
+                              Create +
+                            </AppButton>
                           </div>
                         </div>
                       )}

@@ -68,8 +68,8 @@ export function calculateDashboardKPIs(
     const totalTimeSaved = finishedExecutions.reduce((acc, curr) => acc + (curr.time_saved_seconds || 0), 0);
     const avgTimeSaved = totalCount > 0 ? Math.round(totalTimeSaved / totalCount) : 0;
 
-    const laraExecutions = executions.filter((e) => e.workflow_name?.toLowerCase() === 'lara')
-        .reduce((acc, curr) => acc + (curr.messages_sent || 0), 0);
+    // Count Lara executions - each Lara workflow execution = 1 template sent
+    const laraTemplatesSent = executions.filter((e) => e.workflow_name?.toLowerCase() === 'lara').length;
 
     return [
         {
@@ -111,7 +111,7 @@ export function calculateDashboardKPIs(
         {
             id: 'messages-sent',
             label: 'Message Sent',
-            value: (messagesCount || executions.reduce((acc, curr) => acc + (curr.messages_sent || 0), 0)).toString(),
+            value: messagesCount.toString(),
             trend: 0,
             trendLabel: 'Communications',
             subtext: 'WhatsApp History',
@@ -120,7 +120,7 @@ export function calculateDashboardKPIs(
         {
             id: 'templates-sent',
             label: 'Template Sent',
-            value: laraExecutions.toString(),
+            value: laraTemplatesSent.toString(),
             trend: 0,
             trendLabel: 'Lara Agent',
             subtext: 'Automated Outreach',
@@ -403,24 +403,70 @@ export function formatCurrency(value: number): string {
 export function cleanMessageContent(content: string): string {
     if (!content) return '';
 
-    // 1. Filter out internal AI process logs
-    if (content.startsWith('Calling Think with input:')) return '';
-    if (content.startsWith('Calling ') && content.includes(' with input:')) return '';
+    const trimmed = content.trim();
 
-    // 2. Handle JSON-formatted responses from LLMs
-    // Some n8n nodes or AI agents return raw JSON strings
-    if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+    // 1. Filter out internal AI process logs
+    if (trimmed.startsWith('Calling Think with input:')) return '';
+    if (trimmed.startsWith('Calling ') && trimmed.includes(' with input:')) return '';
+
+    // 2. Handle JSON-formatted responses (objects or arrays)
+    const isJsonObject = trimmed.startsWith('{') && trimmed.endsWith('}');
+    const isJsonArray = trimmed.startsWith('[') && trimmed.endsWith(']');
+
+    if (isJsonObject || isJsonArray) {
         try {
-            const parsed = JSON.parse(content);
-            // Case 1: n8n structured response { "response": "..." }
-            if (parsed.response) return parsed.response;
-            // Case 2: Array-wrapped response [{ "response": "..." }]
-            if (Array.isArray(parsed) && parsed[0]?.response) return parsed[0].response;
-            // Case 3: Just return the object as string if no clear 'response' key
-            return typeof parsed === 'string' ? parsed : JSON.stringify(parsed);
+            const parsed = JSON.parse(trimmed);
+
+            // Case: Array of objects (tool outputs, PMS data, etc.)
+            if (Array.isArray(parsed)) {
+                // Check if this looks like PMS/tool data (has row_number, Codice, etc.)
+                if (parsed.length > 0 && parsed[0]) {
+                    const firstItem = parsed[0];
+                    const toolDataKeys = ['row_number', 'Codice', 'Riferimento', 'Arrivo', 'Partenza', 'Camere', 'Ospiti'];
+                    const hasToolData = toolDataKeys.some(key => key in firstItem);
+                    if (hasToolData) {
+                        // This is tool/PMS output, filter it out
+                        return '';
+                    }
+                }
+                // Check for response in array
+                if (parsed[0]?.response) return parsed[0].response;
+                // If it's an array of strings, join them
+                if (parsed.every((item: any) => typeof item === 'string')) {
+                    return parsed.join(' ');
+                }
+                // Otherwise filter out as internal data
+                return '';
+            }
+
+            // Case: Single object
+            if (typeof parsed === 'object' && parsed !== null) {
+                // Check for tool data indicators
+                const toolDataKeys = ['row_number', 'Codice', 'Riferimento', 'Arrivo', 'Partenza', 'Camere', 'Ospiti', 'tool_calls'];
+                const hasToolData = toolDataKeys.some(key => key in parsed);
+                if (hasToolData) {
+                    return '';
+                }
+
+                // Extract response if present
+                if (parsed.response) return parsed.response;
+                if (parsed.message) return parsed.message;
+                if (parsed.text) return parsed.text;
+                if (parsed.content) return cleanMessageContent(parsed.content);
+
+                // Filter out objects without clear user-facing content
+                return '';
+            }
+
+            return typeof parsed === 'string' ? parsed : '';
         } catch (e) {
             // Not valid JSON or parsing failed, fall back to original content
         }
+    }
+
+    // 3. Filter out tool call traces that weren't caught as JSON
+    if (trimmed.includes('"tool_calls"') || trimmed.includes('"row_number"')) {
+        return '';
     }
 
     return content;

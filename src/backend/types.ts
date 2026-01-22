@@ -181,6 +181,8 @@ export interface Execution {
   late_checkout_value?: number;
   early_checkin_value?: number;
   services_value?: number;
+  breakfast_value?: number;
+  transfer_value?: number;
   orphan_days_count?: number;
   value_captured?: number;
 
