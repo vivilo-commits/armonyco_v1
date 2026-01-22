@@ -45,6 +45,10 @@ This log captures specific project "recipes" and lessons to ensure zero-mistake 
 ## UI Cleanup & Premium Styling
 - **Redundant Components**: Remove deprecated features (like "Universal Engines") from control panels to reduce cognitive load and simplify the UI.
 - **Layout Precision**: Ensure alignment across different sections of settings/profile pages. Use consistent padding and centering for action buttons (especially those with status feedback labels) to maintain a premium feel.
-- **Micro-Copy Matters**: Be precise with labels and descriptions (e.g. "Opened At" vs "Reported At") to ensure consistency with industry standards.
-- **Bidirectional Lifecycle**: Always implement clear path back (Reopen) for resolved items. This prevents operator "dead-ends" and ensures data integrity if an issue was closed prematurely or by a different operator.
 - **Aggressive Sanitization**: Common "LLM reasoning" indicators (e.g., "time: ", "plan: ", "Think:") must be stripped from operator-facing chat contexts to maintain an institutional, non-technical appearance.
+
+## 🔮 Future Product Recipes (Roadmap)
+- **Governance Audit PDF**: Replace legacy `alert()` with a `GovernanceAuditModal`. 
+    - **Concept**: Generate a summarized "Audit Protocol" document ready for download/print.
+    - **Technical Approach**: Use React-to-Print or a specialized `@media print` layout. The document must be a global snapshot (ROI from Growth + Interventions from Escalations + Health from Dashboard).
+    - **Consistency**: Keep the "Audit" visual look predefined/static while data remains 100% dynamic.
