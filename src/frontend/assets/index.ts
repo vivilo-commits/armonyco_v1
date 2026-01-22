@@ -1,6 +1,7 @@
 import logoFull from './logo-full.png';
 import logoIcon from './logo-icon.png';
 import logoFooter from './logo-footer.png';
+import logoArmonyco from './logos/5.png'; // Added for modal headers
 
 // Socials
 import social1 from './social-1.png';
@@ -14,6 +15,7 @@ export const ASSETS = {
         full: logoFull,
         icon: logoIcon,
         footer: logoFooter,
+        armonyco: logoArmonyco,
     },
     socials: [social1, social2, social3, social4, social5],
 };

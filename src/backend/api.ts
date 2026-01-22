@@ -805,6 +805,40 @@ class ApiService {
     return { success: true };
   }
 
+  async reopenEscalation(id: string) {
+    console.log('[API] 🔓 Reopening escalation:', id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const isFromExecutions = !isUuid;
+
+    const updates = {
+      status: 'OPEN',
+      resolved_at: null,
+      resolved_by: null,
+      resolved_by_name: null,
+      resolution_notes: null,
+    };
+
+    if (isFromExecutions) {
+      // Update executions table
+      await this.updateEscalation(id, {
+        escalation_status: 'OPEN',
+      }, 'executions');
+    }
+
+    // Update escalations table
+    const { data: existing } = await supabase
+      .from('escalations')
+      .select('id')
+      .or(`execution_id.eq.${id},id.eq.${id}`)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await this.updateEscalation(existing.id, updates, 'escalations');
+    }
+
+    return { success: true };
+  }
+
   /**
    * Manually insert a resolved escalation to Supabase
    * Use this to backfill escalations that weren't persisted

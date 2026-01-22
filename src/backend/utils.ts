@@ -61,7 +61,6 @@ export function calculateDashboardKPIs(
     const p50 = latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.5)] : 0;
     const medianTime = p50 > 0 ? (p50 / 1000).toFixed(1) + 's' : '--';
 
-    const passedGovernance = finishedExecutions.filter((e) => e.governance_verdict?.toUpperCase() === 'PASSED').length;
     const failedGovernance = finishedExecutions.filter((e) => e.governance_verdict?.toUpperCase() === 'FAILED').length;
     // Decision Integrity = % of decisions that passed governance (100% = perfect, 0% = all failed)
     const decisionIntegrity = totalCount > 0
@@ -471,7 +470,12 @@ export function cleanMessageContent(content: string): string {
     }
 
     // 3. Filter out tool call traces that weren't caught as JSON
-    if (trimmed.includes('"tool_calls"') || trimmed.includes('"row_number"')) {
+    // Specifically filter out strings starting with "time: " (typical Think tool output)
+    if (trimmed.toLowerCase().startsWith('time: ') && trimmed.toLowerCase().includes('plan:')) {
+        return '';
+    }
+
+    if (trimmed.includes('"tool_calls"') || trimmed.includes('"row_number"') || trimmed.toLowerCase().includes('escalate yes')) {
         return '';
     }
 

@@ -12,6 +12,7 @@ import { api } from '@/backend/api';
 import { cleanMessageContent } from '@/backend/utils';
 import { Escalation, WhatsAppHistory } from '@/backend/types';
 import { useAuth } from '../../contexts/AuthContext';
+import { ASSETS } from '@/frontend/assets';
 
 interface EscalationDetailModalProps {
   isOpen: boolean;
@@ -129,7 +130,23 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
     }
   };
 
+  const handleReopen = async () => {
+    if (!escalation) return;
+    setIsSubmitting(true);
+    try {
+      await api.reopenEscalation(escalation.id);
+      onResolved?.(); // Refresh lists
+      onClose();
+    } catch (e) {
+      console.error('Failed to reopen escalation', e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (!escalation) return null;
+
+  const isResolved = escalation.status === 'RESOLVED';
 
   return (
     <BaseModal
@@ -137,7 +154,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
       onClose={onClose}
       title="Armonyco | DecisionOS™"
       subtitle={showProofForm ? 'Resolution Summary' : 'Intervention Detail'}
-      icon={<img src="../../assets/logos/5.png" alt="Armonyco" className="w-8 h-8 object-contain" />}
+      icon={<img src={ASSETS.logos.armonyco} alt="Armonyco" className="w-8 h-8 object-contain" />}
     >
       <div className="space-y-8 px-1">
         {!showProofForm ? (
@@ -152,7 +169,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                     <AppBadge variant={escalation.classification === 'Critical' ? 'error' : 'warning'}>
                       {escalation.classification || 'M1'} Priority
                     </AppBadge>
-                    {escalation.status === 'RESOLVED' && (
+                    {isResolved && (
                       <AppBadge variant="success">RESOLVED</AppBadge>
                     )}
                   </div>
@@ -167,7 +184,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                       </span>
                     </div>
 
-                    {escalation.status === 'RESOLVED' && (
+                    {isResolved && (
                       <div className="flex flex-col">
                         <span className="text-[10px] text-stone-500 uppercase tracking-widest font-black mb-1">Resolved By</span>
                         <span className="text-xs text-green-400 font-mono flex items-center gap-2 uppercase">
@@ -183,7 +200,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                       </span>
                     </div>
 
-                    {escalation.status === 'RESOLVED' && (
+                    {isResolved && (
                       <div className="flex flex-col">
                         <span className="text-[10px] text-stone-500 uppercase tracking-widest font-black mb-1">Resolved At</span>
                         <span className="text-xs text-stone-300 font-mono">
@@ -268,7 +285,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                 </div>
                 <div className="flex-[2] space-y-2">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-stone-500 ml-1">
-                    Resolution Notes
+                    {isResolved ? 'Resolution Notes' : 'Progress Notes'}
                   </label>
                   <textarea
                     className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-gold-start min-h-[80px]"
@@ -338,6 +355,9 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                   </div>
                 ) : (
                   history.map((h) => {
+                    // STRICTOR FILTERING: Filter by type FIRST
+                    if (h.message?.type === 'tool') return null;
+
                     const cleanedText = cleanMessageContent(h.message?.content || '');
 
                     // Filter out:
@@ -380,18 +400,32 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
             </div>
 
             <div className="pt-6 border-t border-stone-100 flex gap-3">
-              <AppButton
-                variant="primary"
-                className="flex-1"
-                onClick={() => setShowProofForm(true)}
-                icon={<CheckCircle2 size={18} />}
-                disabled={!canEdit}
-              >
-                Resolve Escalation
-              </AppButton>
-              <AppButton variant="secondary" onClick={onClose}>
-                Keep Open
-              </AppButton>
+              {isResolved ? (
+                <AppButton
+                  variant="primary"
+                  className="flex-1 gold-gradient !text-stone-900"
+                  onClick={handleReopen}
+                  disabled={isSubmitting}
+                  icon={isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Shield size={18} />}
+                >
+                  {isSubmitting ? 'Reopening...' : 'Reopen Escalation'}
+                </AppButton>
+              ) : (
+                <>
+                  <AppButton
+                    variant="primary"
+                    className="flex-1"
+                    onClick={() => setShowProofForm(true)}
+                    icon={<CheckCircle2 size={18} />}
+                    disabled={!canEdit}
+                  >
+                    Resolve Escalation
+                  </AppButton>
+                  <AppButton variant="secondary" onClick={onClose}>
+                    Keep Open
+                  </AppButton>
+                </>
+              )}
             </div>
           </>
         ) : (
