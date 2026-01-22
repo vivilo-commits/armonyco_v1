@@ -7,6 +7,8 @@ This log captures specific project "recipes" and lessons to ensure zero-mistake 
 - **Explicit outDir**: Instead of symlinks, configure `vite.config.ts` and `vercel.json` to explicitly point to `src/dist`.
 - **Flat Architecture**: Keeping the architecture folder (`the_chameleon`) visible and shallow (no nested `.agent/architecture`) avoids agent confusion and user "folder-fatigue".
 - **Hash-First Navigation**: Syncing the app view with `#` in the URL survives refreshes and provides a premium, stateful experience.
+- **Mobile Adaptive CTA**: Moving large header CTAs (like "Start Operating") into a premium mobile drawer menu prevents layout collision while maintaining high conversion paths on small screens.
+- **Shield Protocol**: Using clear, distinct icons (Shield for context/security, Clock for history) in intervention modals improves operator cognitive speed during high-stress alerts.
 
 ## ⚠️ Lessons (Avoid These Pitfalls)
 - **Root Symlinks**: Avoid creating symlinks (like `ln -s src/.vercel .vercel`) in the root. They clutter the UI and can lead to pathing errors in some CLI contexts. Configure the tools directly instead.
@@ -44,3 +46,5 @@ This log captures specific project "recipes" and lessons to ensure zero-mistake 
 - **Redundant Components**: Remove deprecated features (like "Universal Engines") from control panels to reduce cognitive load and simplify the UI.
 - **Layout Precision**: Ensure alignment across different sections of settings/profile pages. Use consistent padding and centering for action buttons (especially those with status feedback labels) to maintain a premium feel.
 - **Micro-Copy Matters**: Be precise with labels and descriptions (e.g. "Opened At" vs "Reported At") to ensure consistency with industry standards.
+- **Bidirectional Lifecycle**: Always implement clear path back (Reopen) for resolved items. This prevents operator "dead-ends" and ensures data integrity if an issue was closed prematurely or by a different operator.
+- **Aggressive Sanitization**: Common "LLM reasoning" indicators (e.g., "time: ", "plan: ", "Think:") must be stripped from operator-facing chat contexts to maintain an institutional, non-technical appearance.
