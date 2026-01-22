@@ -48,7 +48,8 @@ class ApiService {
     options: {
       select?: string;
       eq?: Record<string, any>;
-      filter?: { column: string; value: any }; // Added for getEscalationContext
+      filter?: { column: string; value: any };
+      range?: { column: string; start?: string; end?: string }; // Added for date filtering
       order?: { column: string; ascending?: boolean };
       limit?: number;
     } = {}
@@ -100,6 +101,16 @@ class ApiService {
         query = query.limit(options.limit);
       }
 
+      // Apply date range filters
+      if (options.range) {
+        if (options.range.start) {
+          query = query.gte(options.range.column, options.range.start);
+        }
+        if (options.range.end) {
+          query = query.lte(options.range.column, options.range.end);
+        }
+      }
+
       const { data, error } = await query;
 
       if (error) {
@@ -118,21 +129,30 @@ class ApiService {
 
   // --- Dashboard Data ---
 
-  async getDashboardData() {
+  async getDashboardData(startDate?: string, endDate?: string) {
     // Import cashflow aggregation
-    const { getCashflowAggregation } = await import('./cashflow-api');
+    const { getCashflowAggregation, getCashflowForPeriod } = await import('./cashflow-api');
 
     const [executions, history, cashflowAgg, openEscalations] = await Promise.all([
       this.supabaseFetch<Execution[]>('executions', {
+        range: startDate || endDate ? { column: 'started_at', start: startDate, end: endDate } : undefined,
         order: { column: 'started_at', ascending: false },
         limit: 1000
       }),
       this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
+        range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
         order: { column: 'id', ascending: false },
         limit: 100
       }),
-      getCashflowAggregation(this.organizationId || undefined),
-      this.getEscalationsData('OPEN'),
+      // Use period filtering for cashflow if dates are provided
+      startDate || endDate
+        ? getCashflowForPeriod(startDate || '2000-01-01', endDate || new Date().toISOString(), this.organizationId || undefined).then(txs => {
+          // Manual aggregation of returned transactions
+          const total_revenue = txs.reduce((sum, tx) => sum + parseCurrency(tx.total_amount), 0);
+          return { total_revenue, transaction_count: txs.length };
+        }) as any
+        : getCashflowAggregation(this.organizationId || undefined),
+      this.getEscalationsData('OPEN', startDate, endDate),
     ]);
 
     const safeExecutions = executions || [];
@@ -230,15 +250,17 @@ class ApiService {
 
   // --- Growth Data ---
 
-  async getGrowthData() {
-    // Fetch executions (for future use when workflows are fixed)
+  async getGrowthData(startDate?: string, endDate?: string) {
+    // Fetch executions
     const executions = await this.supabaseFetch<Execution[]>('executions', {
+      range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
       order: { column: 'created_at', ascending: false },
       limit: 1000,
     });
 
     // Fetch cashflow transactions as primary data source for Growth KPIs
     const cashflowTransactions = await this.supabaseFetch<CashflowTransaction[]>('cashflow_summary', {
+      range: startDate || endDate ? { column: 'collection_date', start: startDate, end: endDate } : undefined,
       order: { column: 'created_at', ascending: false },
       limit: 1000,
     });
@@ -431,17 +453,19 @@ class ApiService {
 
   // --- Escalations ---
 
-  async getEscalationsData(status?: string): Promise<Escalation[]> {
-    console.log('[API] 📋 getEscalationsData called with status:', status);
+  async getEscalationsData(status?: string, startDate?: string, endDate?: string): Promise<Escalation[]> {
+    console.log('[API] 📋 getEscalationsData called with status:', status, 'Period:', { startDate, endDate });
 
     // 1. Fetch from 'escalations' (dedicated table) - PRIMARY SOURCE
     const escalationsRes = await this.supabaseFetch<Escalation[]>('escalations', {
+      range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
       order: { column: 'created_at', ascending: false }
     });
     console.log('[API] 📋 Escalations table returned:', escalationsRes?.length || 0, 'records');
 
     // 2. Fetch from 'executions' - SECONDARY SOURCE for detection
     const allExecutions = await this.supabaseFetch<Execution[]>('executions', {
+      range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
       order: { column: 'created_at', ascending: false },
       limit: 500
     });
@@ -1134,14 +1158,14 @@ class ApiService {
 
   // --- Audit & Compliance ---
 
-  async getAuditData() {
-    console.log('[API] 🛡️ Generating Governance Audit Data...');
+  async getAuditData(startDate?: string, endDate?: string) {
+    console.log('[API] 🛡️ Generating Governance Audit Data... Period:', { startDate, endDate });
 
     const [dashboardData, growthData, openEscalations, allEscalations] = await Promise.all([
-      this.getDashboardData(),
-      this.getGrowthData(),
-      this.getEscalationsData('OPEN'),
-      this.getEscalationsData('ALL')
+      this.getDashboardData(startDate, endDate),
+      this.getGrowthData(startDate, endDate),
+      this.getEscalationsData('OPEN', startDate, endDate),
+      this.getEscalationsData('ALL', startDate, endDate)
     ]);
 
     const resolvedEscalationsCount = allEscalations.filter(e => e.status === 'RESOLVED').length;
