@@ -243,15 +243,17 @@ class ApiService {
       limit: 1000,
     });
 
-    // Fetch escalation metrics from escalations table
-    const escalationsData = await this.supabaseFetch<Escalation[]>('escalations', {
-      order: { column: 'created_at', ascending: false },
-      limit: 500,
-    });
-
-    const safeEscalations = escalationsData || [];
-    const resolvedEscalations = safeEscalations.filter(e => e.status === 'RESOLVED');
-    const openEscalations = safeEscalations.filter(e => e.status === 'OPEN');
+    // Calculate escalation metrics from executions.escalation_status (NOT escalations table which is empty)
+    const safeExecutions = executions || [];
+    const executionsWithHumanIntervention = safeExecutions.filter(e =>
+      e.human_escalation_triggered === true
+    );
+    const resolvedEscalations = executionsWithHumanIntervention.filter(e =>
+      e.escalation_status === 'RESOLVED'
+    );
+    const openEscalations = executionsWithHumanIntervention.filter(e =>
+      e.escalation_status !== 'RESOLVED'
+    );
 
     // Calculate KPIs using both sources (cashflow is primary while executions is empty)
     const kpis = calculateGrowthKPIs(executions || [], cashflowTransactions || []);
@@ -271,12 +273,11 @@ class ApiService {
         status: 'Captured' as 'Approved' | 'Captured' | 'Verified',
       }));
 
-    // Calculate real metrics
-    const safeExecutions = executions || [];
-    const finishedExecutions = safeExecutions.filter(e => e.finished);
     const totalHoursSaved = safeExecutions.reduce((sum, e) => sum + (e.time_saved_seconds || 0), 0) / 3600;
-    const automationRate = finishedExecutions.length > 0
-      ? Math.round((finishedExecutions.filter(e => !e.human_escalation_triggered).length / finishedExecutions.length) * 100)
+
+    // Automation Rate: (executions without escalation) / total executions
+    const automationRate = safeExecutions.length > 0
+      ? Math.round((safeExecutions.filter(e => !e.human_escalation_triggered).length / safeExecutions.length) * 100)
       : 0;
 
     const valueCreated = [
@@ -284,27 +285,28 @@ class ApiService {
       { label: 'Escalations Resolved', value: String(resolvedEscalations.length) },
       { label: 'Escalations Open', value: String(openEscalations.length) },
       { label: 'Automation Rate', value: `${automationRate}%` },
-      { label: 'Total Escalations', value: String(safeEscalations.length) },
-      { label: 'Resolution Rate', value: safeEscalations.length > 0 ? `${Math.round((resolvedEscalations.length / safeEscalations.length) * 100)}%` : '0%' },
+      { label: 'Total Escalations', value: String(executionsWithHumanIntervention.length) },
+      { label: 'Resolution Rate', value: executionsWithHumanIntervention.length > 0 ? `${Math.round((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100)}%` : '0%' },
     ];
 
     // Add escalation summary
     const escalationSummary = {
-      total: safeEscalations.length,
+      total: executionsWithHumanIntervention.length,
       open: openEscalations.length,
       resolved: resolvedEscalations.length,
-      resolutionRate: safeEscalations.length > 0 ? Math.round((resolvedEscalations.length / safeEscalations.length) * 100) : 0,
+      resolutionRate: executionsWithHumanIntervention.length > 0 ? Math.round((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100) : 0,
       recentResolutions: resolvedEscalations.slice(0, 5).map(e => ({
-        id: e.id,
-        phone: e.phone_clean,
-        reason: e.reason || e.metadata?.reason,
-        resolvedAt: e.resolved_at,
-        resolvedBy: e.resolved_by_name || e.metadata?.resolved_by_name,
+        id: e.execution_id,
+        phone: e.workflow_output?.phone || '',
+        reason: e.human_escalation_reason || '',
+        resolvedAt: e.updated_at,
+        resolvedBy: e.workflow_output?.resolved_by || '',
       })),
     };
 
     return { kpis, wins, valueCreated, escalationSummary };
   }
+
 
   // --- Controls Data ---
 
@@ -449,7 +451,9 @@ class ApiService {
 
     // Detect escalations from executions
     // STRICT: Only count as escalation if human_escalation_triggered is EXPLICITLY true
-    // This prevents false positives from the n8n Universal Normalizer
+    // This prevents false positives and differentiates from Growth page metrics:
+    // - Growth counts all escalation_status (risk situations)
+    // - Escalations page counts only human interventions (human_escalation_triggered = true)
     const mappedExecutions: Escalation[] = (allExecutions || [])
       .filter(exec => {
         // Skip mock/test data
@@ -457,28 +461,17 @@ class ApiService {
 
         const workflowData = this.robustParseOutput(exec.workflow_output);
 
-        // STRICT detection: Only if explicitly triggered = true
-        // The n8n normalizer was setting this to true even when it shouldn't
+        // Only check if human_escalation_triggered is true
+        // Don't require a meaningful reason - empty reasons should still show up for resolution
         const isExplicitlyTriggered =
           exec.human_escalation_triggered === true ||
           workflowData?.human_escalation_triggered === true;
 
-        // Additional check: must have a meaningful reason (not just empty string or default)
-        const hasMeaningfulReason =
-          (exec.human_escalation_reason && exec.human_escalation_reason.length > 5) ||
-          (workflowData?.human_escalation_reason && workflowData.human_escalation_reason.length > 5) ||
-          (workflowData?.escalation?.reason && workflowData.escalation.reason.length > 5);
-
-        // Only count as escalation if BOTH conditions are met:
-        // 1. Explicitly triggered
-        // 2. Has a meaningful reason (not auto-generated defaults)
-        const hasTrigger = isExplicitlyTriggered && hasMeaningfulReason;
-
-        if (hasTrigger) {
-          console.log('[API] 📋 Found real escalation:', exec.execution_id, 'reason:', exec.human_escalation_reason || workflowData?.human_escalation_reason);
+        if (isExplicitlyTriggered) {
+          console.log('[API] 📋 Found human intervention:', exec.execution_id);
         }
 
-        return hasTrigger;
+        return isExplicitlyTriggered;
       })
       .map(exec => {
         const workflowData = this.robustParseOutput(exec.workflow_output);
@@ -506,7 +499,12 @@ class ApiService {
           exec.human_escalation_reason ||
           '';
 
-        const safePhone = workflowData?.guest?.phone || sessionId || '';
+        // Extract phone from multiple possible locations
+        const safePhone = workflowData?.guest?.phone ||
+          workflowData?.phone ||
+          workflowData?.channel?.phone ||
+          sessionId ||
+          '';
         const phoneClean = typeof safePhone === 'string' ? normalizePhone(safePhone) : '';
 
         // Determine status from multiple sources
@@ -525,8 +523,8 @@ class ApiService {
         }
 
         return {
-          id: exec.execution_id,
-          phone_clean: phoneClean || exec.execution_id,
+          id: exec.execution_id || 'unknown',
+          phone_clean: phoneClean || sessionId || exec.execution_id, // Prefer session_id over execution_id
           execution_id: exec.execution_id,
           status: resolvedStatus as 'OPEN' | 'RESOLVED' | 'DISMISSED',
           priority: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'LOW'),

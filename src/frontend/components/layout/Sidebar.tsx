@@ -24,13 +24,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
 }) => {
   const [collapsed, setCollapsed] = useState(true);
-  const { profile, organization } = useAuth();
+  const { profile, organization, canAccessSettings, canAccessControls } = useAuth();
 
   // Use profile data from AuthContext
   const userInfo = {
     name: profile?.full_name || organization?.name || 'Admin User',
     email: profile?.email || 'admin@armonyco.ai',
   };
+
+  // Filter menu items based on role permissions
+  const filteredNavItems = NAV_ITEMS.filter(item => {
+    if (item.id === 'SETTINGS') return canAccessSettings;
+    if (item.id === 'CONTROLS') return canAccessControls;
+    return true; // Show all other items (Dashboard, Growth, Escalations, Message Log)
+  });
 
   const NavContent = () => (
     <>
@@ -60,7 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Navigation */}
       <nav className="flex-1 py-4 px-3 space-y-1">
-        {NAV_ITEMS.map((item) => {
+        {filteredNavItems.map((item) => {
           const isActive = currentView === item.id;
           const showBadge = item.id === 'ESCALATIONS' && escalationCount > 0;
 
@@ -124,19 +131,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-4 border-t border-stone-100/40">
         <div
           onClick={() => {
-            onChangeView(View.SETTINGS);
-            onCloseMobile();
-          }}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
+            if (canAccessSettings) {
               onChangeView(View.SETTINGS);
               onCloseMobile();
             }
           }}
-          aria-label="User settings"
-          className={`flex items-center w-full hover:bg-stone-50 rounded-2xl p-3 transition-all duration-300 border border-transparent hover:border-stone-100 group cursor-pointer ${collapsed ? 'justify-center' : ''}`}
+          role="button"
+          tabIndex={canAccessSettings ? 0 : -1}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && canAccessSettings) {
+              onChangeView(View.SETTINGS);
+              onCloseMobile();
+            }
+          }}
+          aria-label={canAccessSettings ? "User settings" : undefined}
+          className={`flex items-center w-full rounded-2xl p-3 transition-all duration-300 border border-transparent group ${canAccessSettings ? 'hover:bg-stone-50 hover:border-stone-100 cursor-pointer' : 'cursor-default'} ${collapsed ? 'justify-center' : ''}`}
         >
           <div className="w-10 h-10 rounded-xl bg-stone-50 flex items-center justify-center text-[10px] font-bold text-stone-600 shrink-0 border border-stone-100 shadow-sm group-hover:shadow-premium transition-all">
             {(userInfo.name || 'User')

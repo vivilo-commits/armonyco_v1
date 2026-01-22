@@ -56,6 +56,11 @@ interface AuthContextType {
     canEdit: boolean;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
+    // Role-based permissions
+    userRole: 'owner' | 'admin' | 'manager' | 'viewer' | null;
+    canAccessSettings: boolean;
+    canEditSettings: boolean;
+    canAccessControls: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -138,14 +143,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                     api.setOrganizationId(orgData.id);
                 }
 
+
                 // Fetch entitlements
-                const { data: entData } = await supabase
+                console.log('[AuthContext] Fetching entitlements for organization:', membershipData.organization_id);
+                const { data: entData, error: entError } = await supabase
                     .from('organization_entitlements')
                     .select('*')
                     .eq('organization_id', membershipData.organization_id)
                     .single();
 
+                console.log('[AuthContext] Entitlements fetch result:', { entData, entError });
+
+                if (entError) {
+                    console.error('[AuthContext] Failed to fetch entitlements:', entError);
+                }
+
                 if (entData) {
+                    console.log('[AuthContext] Setting entitlements:', {
+                        subscription_active: entData.subscription_active,
+                        plan_tier: entData.plan_tier,
+                        credits: entData.credits_balance
+                    });
                     setEntitlements({
                         subscription_active: entData.subscription_active || false,
                         subscription_status: entData.subscription_status || null,
@@ -155,6 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                         auto_topup_threshold: entData.auto_topup_threshold || 10000,
                         auto_topup_amount: entData.auto_topup_amount || 10000,
                     });
+                } else {
+                    console.warn('[AuthContext] No entitlements data found for organization:', membershipData.organization_id);
                 }
             }
         } catch (error) {
@@ -182,7 +202,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }
 
+
     const organizationId = membership?.organization_id || null;
+
+    // Role-based permissions
+    const userRole = membership?.role.toLowerCase() as 'owner' | 'admin' | 'manager' | 'viewer' | null || null;
+
+    // Admin/Owner: full access
+    // Manager: can see settings but limited edit, can see/edit controls
+    // Viewer: no settings/controls menu
+    const canAccessSettings = userRole ? ['owner', 'admin', 'manager'].includes(userRole) : false;
+    const canEditSettings = userRole ? ['owner', 'admin'].includes(userRole) : false;
+    const canAccessControls = userRole ? ['owner', 'admin', 'manager'].includes(userRole) : false;
 
     // Derived blocking states
     // Block if: user is logged in AND (no entitlements OR subscription is not active)
@@ -206,6 +237,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 canEdit,
                 signOut,
                 refreshProfile,
+                userRole,
+                canAccessSettings,
+                canEditSettings,
+                canAccessControls,
             }}
         >
             {children}

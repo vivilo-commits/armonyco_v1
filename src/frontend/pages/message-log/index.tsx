@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppPage, AppBadge, AppButton } from '@/frontend/components/design-system';
-import { Search, MessageCircle, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Search, MessageCircle, ShieldCheck } from 'lucide-react';
 
 import { api } from '@/backend/api';
 import { supabase } from '@/database/supabase';
@@ -26,9 +26,12 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
   const fetchData = useCallback(async () => {
     const [convRes, escRes] = await Promise.all([
       api.getConversationsData(),
-      api.getEscalationsData()
+      api.getEscalationsData('OPEN') // Only fetch open escalations
     ]);
-    if (escRes) setOpenEscalations(escRes);
+    if (escRes) {
+      console.log('[MessageLog] Open escalations loaded:', escRes.length, escRes);
+      setOpenEscalations(escRes);
+    }
     return convRes;
   }, []);
 
@@ -148,7 +151,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
       <div className="flex h-[calc(100vh-64px)] items-center justify-center p-8 bg-stone-50">
         <div className="p-10 text-center max-w-md border border-red-200 bg-red-50 rounded-3xl shadow-xl">
           <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-6 text-red-500">
-            <AlertTriangle size={24} />
+            <span className="text-xl">🚨</span>
           </div>
           <h3 className="text-xl font-bold text-stone-900 mb-3">Connection Error</h3>
           <p className="text-sm text-stone-600 leading-relaxed mb-6">{error}</p>
@@ -258,29 +261,62 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                   <div className="pl-14 relative">
                     {/* Escalation Badge in List - Match by phone_clean, session_id, or partial content */}
                     {openEscalations.some(e => {
-                      // Check if escalation matches this conversation by any identifier
+                      // 1. CONTENT-BASED MATCHING (Primary)
+                      // Match by comparing escalation trigger_message with conversation messages
+                      const triggerMsg = (e.metadata?.trigger_message || '').toLowerCase().trim();
+                      const aiOut = (e.metadata?.ai_output || '').toLowerCase().trim();
+
+                      const hasContentMatch = conv.messages.some(msg => {
+                        const msgText = (msg.text || '').toLowerCase().trim();
+                        if (msgText.length < 10) return false;
+
+                        return (
+                          (triggerMsg && (msgText.includes(triggerMsg) || triggerMsg.includes(msgText))) ||
+                          (aiOut && (msgText.includes(aiOut) || aiOut.includes(msgText)))
+                        );
+                      });
+
+                      if (hasContentMatch) return true;
+
+                      // 2. IDENTIFIER-BASED MATCHING (Fallback)
                       const convIdLower = conv.id.toLowerCase();
                       const phoneClean = e.phone_clean?.toLowerCase() || '';
                       const sessionId = e.metadata?.session_id?.toLowerCase() || '';
 
                       return (
-                        phoneClean === convIdLower ||
+                        convIdLower.includes(e.execution_id || '') ||
                         sessionId === convIdLower ||
                         (phoneClean && convIdLower.includes(phoneClean)) ||
-                        (phoneClean && phoneClean.includes(convIdLower.slice(-9))) // Last 9 digits of phone
+                        (phoneClean && phoneClean.includes(convIdLower.slice(-9)))
                       );
                     }) && (
-                      <div className="absolute right-0 top-0">
-                        <div className="w-2 h-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse" title="Active Escalation" />
-                      </div>
-                    )}
+                        <div className="absolute right-0 top-0">
+                          <span className="text-sm animate-pulse" role="img" aria-label="Siren">🚨</span>
+                        </div>
+                      )}
                     <p className="text-xs text-stone-500 font-light truncate mb-3">
                       {conv.messages[conv.messages.length - 1]?.text || 'No messages'}
                     </p>
                     <div className="flex items-center gap-2">
-                      <AppBadge variant={conv.badgeColor === 'green' ? 'success' : 'info'}>
-                        {conv.status}
-                      </AppBadge>
+                      {(() => {
+                        const hasEsc = openEscalations.some(e => {
+                          const triggerMsg = (e.metadata?.trigger_message || '').toLowerCase().trim();
+                          const aiOut = (e.metadata?.ai_output || '').toLowerCase().trim();
+                          const contentMatch = conv.messages.some(msg => {
+                            const text = (msg.text || '').toLowerCase().trim();
+                            return text.length >= 10 && ((triggerMsg && text.includes(triggerMsg)) || (aiOut && text.includes(aiOut)));
+                          });
+                          if (contentMatch) return true;
+                          const convIdLower = conv.id.toLowerCase();
+                          return convIdLower.includes(e.execution_id || '') || e.metadata?.session_id?.toLowerCase() === convIdLower || (e.phone_clean && convIdLower.includes(e.phone_clean.toLowerCase()));
+                        });
+
+                        return (
+                          <AppBadge variant={hasEsc ? 'error' : (conv.badgeColor === 'green' ? 'success' : 'info')}>
+                            {hasEsc ? '🚨 Escalated' : conv.status}
+                          </AppBadge>
+                        );
+                      })()}
                     </div>
                   </div>
                 </button>
@@ -351,7 +387,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                             setShowEscalation(true);
                           }}
                         >
-                          <AlertTriangle size={12} className="text-red-500 animate-pulse" />
+                          <span className="text-sm animate-pulse" role="img" aria-label="Siren">🚨</span>
                           <span className="text-[10px] font-black text-red-600 uppercase tracking-wide">
                             Escalated • Click to resolve
                           </span>
@@ -369,28 +405,26 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
 
                       <div className={`flex ${isAgent ? 'flex-row-reverse' : ''} gap-5 w-full`}>
                         <div
-                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-1 shadow-md transition-transform hover:scale-105 duration-300 ${
-                            isEscalatedMessage
-                              ? 'bg-red-500 text-white ring-2 ring-red-300 ring-offset-2'
-                              : isAgent
-                                ? 'bg-stone-900 text-white'
-                                : 'bg-white border border-stone-100 text-stone-500'
-                          }`}
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 mt-1 shadow-md transition-transform hover:scale-105 duration-300 ${isEscalatedMessage
+                            ? 'bg-red-500 text-white ring-2 ring-red-300 ring-offset-2'
+                            : isAgent
+                              ? 'bg-stone-900 text-white'
+                              : 'bg-white border border-stone-100 text-stone-500'
+                            }`}
                         >
-                          {isEscalatedMessage ? <AlertTriangle size={16} /> : isAgent ? 'A' : selectedConv.initials}
+                          {isEscalatedMessage ? '🚨' : isAgent ? 'A' : selectedConv.initials}
                         </div>
 
                         <div
                           className={`flex flex-col ${isAgent ? 'items-end' : 'items-start'} max-w-[75%]`}
                         >
                           <div
-                            className={`px-7 py-5 rounded-[2.5rem] text-[0.90rem] leading-relaxed shadow-premium-sm transition-all hover:shadow-premium ${
-                              isEscalatedMessage
-                                ? 'bg-red-50 border-2 border-red-300 text-red-900 rounded-tl-none font-medium shadow-[0_0_20px_rgba(239,68,68,0.15)]'
-                                : isAgent
-                                  ? 'bg-stone-900 text-white rounded-tr-none border border-stone-800'
-                                  : 'bg-transparent border-2 border-stone-200 text-stone-800 rounded-tl-none font-medium italic'
-                            }`}
+                            className={`px-7 py-5 rounded-[2.5rem] text-[0.90rem] leading-relaxed shadow-premium-sm transition-all hover:shadow-premium ${isEscalatedMessage
+                              ? 'bg-red-50 border-2 border-red-300 text-red-900 rounded-tl-none font-medium shadow-[0_0_20px_rgba(239,68,68,0.15)]'
+                              : isAgent
+                                ? 'bg-stone-900 text-white rounded-tr-none border border-stone-800'
+                                : 'bg-transparent border-2 border-stone-200 text-stone-800 rounded-tl-none font-medium italic'
+                              }`}
                           >
                             {msg.text?.split(/(\*\*.*?\*\*)/g).map((part: string, i: number) =>
                               part.startsWith('**') && part.endsWith('**') ? (
@@ -419,8 +453,7 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                               <>
                                 <div className="w-1 h-1 rounded-full bg-red-400" />
                                 <span className="text-[9px] text-red-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
-                                  <AlertTriangle size={10} />
-                                  Human Review Required
+                                  🚨 Human Intervention Needed
                                 </span>
                               </>
                             )}
@@ -457,64 +490,104 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                 (phoneClean && phoneClean.includes(convIdLower.slice(-9)))
               );
             }) && (
-              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 animate-in zoom-in duration-300">
-                <div
-                  className="px-6 py-3 shadow-2xl border-red-500/20 bg-stone-900/90 backdrop-blur-md rounded-2xl flex items-center gap-4 cursor-pointer hover:scale-105 transition-transform"
-                  onClick={() => {
-                    const convIdLower = selectedConv.id.toLowerCase();
-                    const esc = openEscalations.find(e => {
-                      const phoneClean = e.phone_clean?.toLowerCase() || '';
-                      const sessionId = e.metadata?.session_id?.toLowerCase() || '';
-                      return (
-                        phoneClean === convIdLower ||
-                        sessionId === convIdLower ||
-                        (phoneClean && convIdLower.includes(phoneClean)) ||
-                        (phoneClean && phoneClean.includes(convIdLower.slice(-9)))
-                      );
-                    });
-                    if (esc) {
-                      setActiveEscalation(esc);
-                      setShowEscalation(true);
-                    }
-                  }}
-                >
-                  <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
-                    <AlertTriangle size={16} className="animate-pulse" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-[9px] font-black text-red-400 uppercase tracking-widest leading-none mb-1">
-                      Human Intervention Required
+                <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 animate-in zoom-in duration-300">
+                  <div
+                    className="px-6 py-3 shadow-2xl border-red-500/20 bg-stone-900/90 backdrop-blur-md rounded-2xl flex items-center gap-4 cursor-pointer hover:scale-105 transition-transform"
+                    onClick={() => {
+                      const convIdLower = selectedConv.id.toLowerCase();
+                      const esc = openEscalations.find(e => {
+                        const phoneClean = e.phone_clean?.toLowerCase() || '';
+                        const sessionId = e.metadata?.session_id?.toLowerCase() || '';
+                        return (
+                          phoneClean === convIdLower ||
+                          sessionId === convIdLower ||
+                          (phoneClean && convIdLower.includes(phoneClean)) ||
+                          (phoneClean && phoneClean.includes(convIdLower.slice(-9)))
+                        );
+                      });
+                      if (esc) {
+                        setActiveEscalation(esc);
+                        setShowEscalation(true);
+                      }
+                    }}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center text-red-500">
+                      <span className="text-sm animate-pulse" role="img" aria-label="Siren">🚨</span>
                     </div>
-                    <div className="text-xs font-bold text-white">
-                      Escalation Triggered for {selectedConv.id}
+                    <div className="text-left">
+                      <div className="text-[9px] font-black text-red-400 uppercase tracking-widest leading-none mb-1">
+                        Human Intervention Required
+                      </div>
+                      <div className="text-xs font-bold text-white">
+                        Escalation Triggered for {selectedConv.id}
+                      </div>
                     </div>
-                  </div>
-                  <div className="ml-4 px-3 py-1 bg-white/10 rounded-full text-[9px] font-black text-white uppercase tracking-tighter">
-                    Resolve
+                    <div className="ml-4 px-3 py-1 bg-white/10 rounded-full text-[9px] font-black text-white uppercase tracking-tighter">
+                      Resolve
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
           </div>
 
-          {/* SIMPLIFIED STATUS BAR */}
-          <div className="absolute bottom-6 left-6 right-6 py-4 px-8 bg-stone-900/95 backdrop-blur-xl rounded-2xl border border-stone-800 shadow-2xl flex items-center justify-between z-10">
-            <div className="flex items-center gap-4">
-              <div className="w-2 h-2 rounded-full gold-gradient animate-pulse shadow-gold-glow" />
-              <div className="text-[11px] font-black text-white uppercase tracking-[0.2em]">
-                Autonomous Protocol Active
+          {/* DYNAMIC STATUS BAR */}
+          {(() => {
+            const currentEscalation = selectedConv ? openEscalations.find(e => {
+              const triggerMsg = (e.metadata?.trigger_message || '').toLowerCase().trim();
+              const aiOut = (e.metadata?.ai_output || '').toLowerCase().trim();
+              const hasContentMatch = selectedConv.messages.some(msg => {
+                const msgText = (msg.text || '').toLowerCase().trim();
+                return msgText.length >= 10 && (
+                  (triggerMsg && (msgText.includes(triggerMsg) || triggerMsg.includes(msgText))) ||
+                  (aiOut && (msgText.includes(aiOut) || aiOut.includes(msgText)))
+                );
+              });
+              if (hasContentMatch) return true;
+
+              const convIdLower = selectedConv.id.toLowerCase();
+              const phoneClean = e.phone_clean?.toLowerCase() || '';
+              const sessionId = e.metadata?.session_id?.toLowerCase() || '';
+              return (
+                convIdLower.includes(e.execution_id || '') ||
+                sessionId === convIdLower ||
+                (phoneClean && convIdLower.includes(phoneClean)) ||
+                (phoneClean && phoneClean.includes(convIdLower.slice(-9)))
+              );
+            }) : null;
+
+            const hasEscalation = !!currentEscalation;
+
+            return (
+              <div className={`absolute bottom-6 left-6 right-6 py-4 px-8 backdrop-blur-xl rounded-2xl border shadow-2xl flex items-center justify-between z-10 transition-all duration-500 ${hasEscalation
+                ? 'bg-red-950/90 border-red-500/30'
+                : 'bg-stone-900/95 border-stone-800'
+                }`}>
+                <div className="flex items-center gap-4">
+                  <div className={`w-2 h-2 rounded-full animate-pulse shadow-glow ${hasEscalation ? 'bg-red-500 shadow-red-500/50' : 'gold-gradient shadow-gold-glow'
+                    }`} />
+                  <div className={`text-[11px] font-black uppercase tracking-[0.2em] ${hasEscalation ? 'text-red-400' : 'text-white'
+                    }`}>
+                    {hasEscalation ? 'Human Intervention Required' : 'Autonomous Protocol Active'}
+                  </div>
+                </div>
+                {hasEscalation && (
+                  <div className="flex gap-3">
+                    <AppButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setActiveEscalation(currentEscalation);
+                        setShowEscalation(true);
+                      }}
+                      className="bg-white/5 border-red-500/20 text-[10px] uppercase tracking-widest h-8 text-red-400 hover:text-red-300"
+                    >
+                      Review & Resolve
+                    </AppButton>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="flex gap-3">
-              <AppButton
-                variant="outline"
-                size="sm"
-                className="bg-white/5 border-white/10 text-[10px] text-white/60 hover:text-white uppercase tracking-widest h-8"
-              >
-                Manual Override
-              </AppButton>
-            </div>
-          </div>
+            );
+          })()}
         </div>
       </div>
 

@@ -338,8 +338,11 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                   history.map((h) => {
                     const cleanedText = cleanMessageContent(h.message?.content || '');
 
-                    // Filter out internal traces or empty AI responses
-                    if (!cleanedText && h.message?.type === 'ai') return null;
+                    // Filter out:
+                    // 1. Empty messages (from AI or human)
+                    // 2. Tool traces / internal processing messages
+                    // 3. Messages with only whitespace
+                    if (!cleanedText || cleanedText.trim() === '') return null;
 
                     const isInbound = h.message?.type === 'human';
                     const isTrigger = escalation.metadata?.message_id && (String(h.id) === String(escalation.metadata.message_id));
@@ -362,7 +365,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                               : 'bg-stone-900 text-white shadow-md'}
                           `}
                         >
-                          {cleanedText || 'Empty message'}
+                          {cleanedText}
                         </div>
                         <span className="text-[9px] text-stone-400 mt-1 font-mono">
                           {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

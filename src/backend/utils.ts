@@ -62,8 +62,11 @@ export function calculateDashboardKPIs(
     const medianTime = p50 > 0 ? (p50 / 1000).toFixed(1) + 's' : '--';
 
     const passedGovernance = finishedExecutions.filter((e) => e.governance_verdict?.toUpperCase() === 'PASSED').length;
-    // ✅ FIX: Decision Integrity defaults to N/A (0%) not 100% when no governance data
-    const decisionIntegrity = totalCount > 0 ? ((passedGovernance / totalCount) * 100).toFixed(1) : '0.0';
+    const failedGovernance = finishedExecutions.filter((e) => e.governance_verdict?.toUpperCase() === 'FAILED').length;
+    // Decision Integrity = % of decisions that passed governance (100% = perfect, 0% = all failed)
+    const decisionIntegrity = totalCount > 0
+        ? (100 - ((failedGovernance / totalCount) * 100)).toFixed(1)
+        : '100.0'; // Default to 100% when no data (no failures = perfect integrity)
 
     const totalTimeSaved = finishedExecutions.reduce((acc, curr) => acc + (curr.time_saved_seconds || 0), 0);
     const avgTimeSaved = totalCount > 0 ? Math.round(totalTimeSaved / totalCount) : 0;
@@ -405,9 +408,12 @@ export function cleanMessageContent(content: string): string {
 
     const trimmed = content.trim();
 
-    // 1. Filter out internal AI process logs
+    // 1. Filter out internal AI process logs and Think tool traces
     if (trimmed.startsWith('Calling Think with input:')) return '';
     if (trimmed.startsWith('Calling ') && trimmed.includes(' with input:')) return '';
+    if (trimmed.startsWith('Analyze guest input:')) return '';
+    if (trimmed.startsWith('Think:')) return '';
+    if (trimmed.startsWith('Thinking:')) return '';
 
     // 2. Handle JSON-formatted responses (objects or arrays)
     const isJsonObject = trimmed.startsWith('{') && trimmed.endsWith('}');

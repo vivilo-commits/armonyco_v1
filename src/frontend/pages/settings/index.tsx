@@ -14,6 +14,8 @@ import {
   MapPin,
   Trash2,
   Plus,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 import {
@@ -51,7 +53,10 @@ interface TeamMember {
 export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('IDENTITY');
   const { loading, error, retry } = usePageData(() => api.getSettingsData());
-  const { profile, organization, entitlements, membership, canEdit, refreshProfile } = useAuth();
+  const { profile, organization, entitlements, membership, canEdit, canEditSettings, refreshProfile } = useAuth();
+
+  // Tabs that managers cannot edit
+  const readOnlyTabs: SettingsTab[] = canEditSettings ? [] : ['IDENTITY', 'ORGANIZATION', 'SYSTEM_ACTIVATION', 'SUBSCRIPTION'];
 
   // Modal states
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
@@ -91,6 +96,7 @@ export const Settings: React.FC = () => {
   const [newFullName, setNewFullName] = useState('');
   const [newRole, setNewRole] = useState('viewer');
   const [creating, setCreating] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (entitlements) {
@@ -332,7 +338,7 @@ export const Settings: React.FC = () => {
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Your full name"
                       icon={User}
-                      disabled={!canEdit}
+                      disabled={readOnlyTabs.includes('IDENTITY')}
                     />
                     <FormField
                       label="Email"
@@ -355,7 +361,7 @@ export const Settings: React.FC = () => {
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+1 (555) 000-0000"
                       icon={Phone}
-                      disabled={!canEdit}
+                      disabled={readOnlyTabs.includes('IDENTITY')}
                     />
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
@@ -384,7 +390,7 @@ export const Settings: React.FC = () => {
                       {['professional', 'friendly', 'formal', 'casual'].map((tone) => (
                         <button
                           key={tone}
-                          disabled={!canEdit}
+                          disabled={readOnlyTabs.includes('IDENTITY')}
                           onClick={() => setAiTone(tone)}
                           className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${aiTone === tone
                             ? 'bg-stone-900 text-white'
@@ -397,7 +403,7 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  {canEdit && (
+                  {!readOnlyTabs.includes('IDENTITY') && (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-6 mt-4 border-t border-stone-100">
                       <AppButton
                         variant="primary"
@@ -435,7 +441,7 @@ export const Settings: React.FC = () => {
                       onChange={(e) => setCompanyName(e.target.value)}
                       placeholder="Acme Corporation S.r.l."
                       icon={Building2}
-                      disabled={!canEdit}
+                      disabled={readOnlyTabs.includes('ORGANIZATION')}
                     />
                     <FormField
                       label="VAT / Tax ID"
@@ -521,13 +527,22 @@ export const Settings: React.FC = () => {
                               onChange={(e) => setNewEmail(e.target.value)}
                               className="flex-1 min-w-0 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
                             />
-                            <input
-                              type="password"
-                              placeholder="Password"
-                              value={newPassword}
-                              onChange={(e) => setNewPassword(e.target.value)}
-                              className="flex-1 min-w-0 px-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
-                            />
+                            <div className="relative flex-1 min-w-0">
+                              <input
+                                type={showPassword ? "text" : "password"}
+                                placeholder="Password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                className="w-full px-4 py-2.5 pr-10 bg-stone-50 border border-stone-200 rounded-xl text-sm focus:outline-none ring-stone-900 focus:ring-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 transition-colors"
+                              >
+                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
                             <select
                               value={newRole}
                               onChange={(e) => setNewRole(e.target.value)}
