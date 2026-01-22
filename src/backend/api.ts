@@ -1132,6 +1132,43 @@ class ApiService {
     } as CashflowSummary;
   }
 
+  // --- Audit & Compliance ---
+
+  async getAuditData() {
+    console.log('[API] 🛡️ Generating Governance Audit Data...');
+
+    const [dashboardData, growthData, openEscalations, allEscalations] = await Promise.all([
+      this.getDashboardData(),
+      this.getGrowthData(),
+      this.getEscalationsData('OPEN'),
+      this.getEscalationsData('ALL')
+    ]);
+
+    const resolvedEscalationsCount = allEscalations.filter(e => e.status === 'RESOLVED').length;
+    const reportId = `AUD-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+
+    return {
+      reportId,
+      timestamp: new Date().toISOString(),
+      organizationId: this.organizationId,
+      kpis: dashboardData.kpis,
+      growthKpis: growthData.kpis,
+      interventions: {
+        total: allEscalations.length,
+        open: openEscalations.length,
+        resolved: resolvedEscalationsCount,
+        resolutionRate: allEscalations.length > 0
+          ? Math.round((resolvedEscalationsCount / allEscalations.length) * 100)
+          : 100
+      },
+      systemHealth: {
+        uptime: '99.9%',
+        latency: dashboardData.kpis.find(k => k.id === 'median-cycle')?.value || '0.0s',
+        decisionIntegrity: dashboardData.kpis.find(k => k.id === 'decision-integrity')?.value || '100%'
+      }
+    };
+  }
+
   /**
    * Helper for race conditions in usePageData
    */

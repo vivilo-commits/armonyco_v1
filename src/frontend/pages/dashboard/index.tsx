@@ -21,12 +21,14 @@ import { getStatusVariant } from '@/backend/utils';
 
 import { ExecutionDetailModal } from '@/frontend/components/modals/ExecutionDetailModal';
 import { ConfigurePMSModal } from '@/frontend/components/modals/ConfigurePMSModal';
+import { GovernanceAuditModal } from '@/frontend/components/modals/GovernanceAuditModal';
 import { Building2 } from 'lucide-react';
 
 export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => {
   const { data, loading, error, retry } = usePageData(() => api.getDashboardData());
   const [selectedEvent, setSelectedEvent] = React.useState<ExecutionEvent | null>(null);
   const [isPMSModalOpen, setIsPMSModalOpen] = React.useState(false);
+  const [isAuditModalOpen, setIsAuditModalOpen] = React.useState(false);
 
   const filteredEvents = React.useMemo(() => {
     if (!data?.events) return [];
@@ -60,7 +62,7 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
             variant="secondary"
             size="sm"
             icon={<Shield size={14} />}
-            onClick={() => alert('Initiating Governance Audit Protocol...')}
+            onClick={() => setIsAuditModalOpen(true)}
           >
             Governance Audit
           </AppButton>
@@ -219,6 +221,11 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
       <ConfigurePMSModal
         isOpen={isPMSModalOpen}
         onClose={() => setIsPMSModalOpen(false)}
+      />
+
+      <GovernanceAuditModal
+        isOpen={isAuditModalOpen}
+        onClose={() => setIsAuditModalOpen(false)}
       />
     </AppPage>
   );
