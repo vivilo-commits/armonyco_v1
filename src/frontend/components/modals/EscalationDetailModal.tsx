@@ -135,7 +135,9 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title={showProofForm ? 'Resolution Summary' : 'Intervention Detail'}
+      title="Armonyco | DecisionOS™"
+      subtitle={showProofForm ? 'Resolution Summary' : 'Intervention Detail'}
+      icon={<img src="../../assets/logos/5.png" alt="Armonyco" className="w-8 h-8 object-contain" />}
     >
       <div className="space-y-8 px-1">
         {!showProofForm ? (
