@@ -196,7 +196,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             <button
               onClick={onLogin}
               className="hidden md:block text-[11px] font-bold uppercase tracking-widest text-stone-500 hover:text-stone-900 transition-colors px-3 py-2"
@@ -205,19 +205,92 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
             </button>
             <button
               onClick={onSignUp}
-              className="bg-stone-900 hover:bg-stone-800 text-white px-6 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all shadow-lg flex items-center gap-2"
+              className="hidden lg:flex bg-stone-900 hover:bg-stone-800 text-white px-6 py-2.5 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all shadow-lg items-center gap-2"
             >
               {LANDING_COPY.HERO.PRIMARY_CTA}
             </button>
+
+            {/* Mobile Actions: Subtle Log In link on mobile header */}
             <button
-              className="md:hidden text-stone-900 p-2"
+              onClick={onLogin}
+              className="md:hidden text-[10px] font-bold uppercase tracking-widest text-stone-500 px-2 py-1"
+            >
+              Log in
+            </button>
+
+            <button
+              className="md:hidden text-stone-900 p-2 hover:bg-stone-100 rounded-lg transition-colors border-none"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle Menu"
             >
               <Menu size={24} />
             </button>
           </div>
         </div>
       </nav>
+
+      {/* --- MOBILE MENU OVERLAY --- */}
+      <div
+        className={`fixed inset-0 z-[60] transition-all duration-500 ${mobileMenuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      >
+        <div
+          className="absolute inset-0 bg-stone-900/60 backdrop-blur-md"
+          onClick={() => setMobileMenuOpen(false)}
+        ></div>
+        <div
+          className={`absolute top-0 right-0 bottom-0 w-[80%] max-w-sm bg-stone-50 shadow-2xl transition-transform duration-500 flex flex-col ${mobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
+        >
+          <div className="p-8 border-b border-stone-100 flex items-center justify-between">
+            <img src={ASSETS.logos.full} alt="Armonyco" className="h-8 w-auto" />
+            <button
+              onClick={() => setMobileMenuOpen(false)}
+              className="p-2 text-stone-400 hover:text-stone-900"
+            >
+              <ArrowRight size={20} className="rotate-180" />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-8 space-y-8">
+            <div className="flex flex-col gap-6">
+              <button
+                onClick={() => { setMobileMenuOpen(false); scrollToSection('what-is'); }}
+                className="text-left text-lg font-serif text-stone-900"
+              >
+                DecisionOS™
+              </button>
+              <button
+                onClick={() => { setMobileMenuOpen(false); scrollToSection('architecture'); }}
+                className="text-left text-lg font-serif text-stone-900"
+              >
+                Architecture
+              </button>
+              <button
+                onClick={() => { setMobileMenuOpen(false); scrollToSection('results'); }}
+                className="text-left text-lg font-serif text-stone-900"
+              >
+                Results
+              </button>
+            </div>
+
+            <div className="h-px bg-stone-200"></div>
+
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={() => { setMobileMenuOpen(false); onLogin(); }}
+                className="w-full py-4 text-center text-xs font-black uppercase tracking-widest text-stone-500 border border-stone-200 rounded-xl"
+              >
+                Log in
+              </button>
+              <button
+                onClick={() => { setMobileMenuOpen(false); onSignUp(); }}
+                className="w-full py-4 text-center text-xs font-black uppercase tracking-widest bg-stone-900 text-white rounded-xl shadow-lg"
+              >
+                Start Operating
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* (1) HERO */}
       <div className="pt-40 px-4 md:px-6 pb-12">
@@ -793,7 +866,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
                   </li>
                   <li>
                     <button
-                      onClick={onLogin}
+                      onClick={() => setShowContact(true)}
                       className="hover:text-[#f5d47c] transition-all duration-300 hover:drop-shadow-[0_0_6px_rgba(245,212,124,0.5)]"
                     >
                       Apply Node
@@ -801,7 +874,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLogin, onSignUp }) =
                   </li>
                   <li>
                     <button
-                      onClick={onLogin}
+                      onClick={() => setShowContact(true)}
                       className="hover:text-[#f5d47c] transition-all duration-300 hover:drop-shadow-[0_0_6px_rgba(245,212,124,0.5)]"
                     >
                       Core Docs
