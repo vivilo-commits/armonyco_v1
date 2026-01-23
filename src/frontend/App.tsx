@@ -34,13 +34,13 @@ import { ContactModal } from '@/frontend/components/modals/ContactModal';
 import { WelcomeModal } from '@/frontend/components/modals/WelcomeModal';
 import { LogoutModal } from '@/frontend/components/modals/LogoutModal';
 
-import { api } from './backend/api';
-import { AuthProvider, useAuth } from './frontend/contexts/AuthContext';
+import { api } from '@/backend/api';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import {
   SubscriptionGate,
   CreditsGate,
   CreditsDepletedBanner,
-} from './frontend/components/SubscriptionGate';
+} from './components/SubscriptionGate';
 
 const AppContent: React.FC = () => {
   // Navigation persistence mapping

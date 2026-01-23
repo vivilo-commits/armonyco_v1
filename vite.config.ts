@@ -7,8 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, 'src', '');
 
   return {
-    root: 'src',
-    envDir: '.',
+    root: 'src/frontend',
+    envDir: '../',
     plugins: [
       tailwindcss(),
       react()
@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
     build: {
-      outDir: 'dist',
+      outDir: '../dist',
+      emptyOutDir: true,
     },
     resolve: {
       alias: [
