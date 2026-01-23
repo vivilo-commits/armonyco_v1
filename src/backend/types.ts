@@ -80,10 +80,12 @@ export interface ExecutionEvent {
   value_captured?: number;
   messages_sent?: number;
   time_saved?: string; // time_saved_seconds formatted as string
+  is_multiple?: boolean;
 
   // Legacy/UI fields
   agent?: string;
   risk?: RiskLevel;
+  workflow_output?: Record<string, any>;
 }
 
 export interface EscalationItem {

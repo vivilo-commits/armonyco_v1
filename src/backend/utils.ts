@@ -177,7 +177,7 @@ export function calculateDashboardKPIs(
         {
             id: 'avg-time-saved',
             label: 'Avg Time Saved',
-            value: `${avgTimeSaved}s`,
+            value: `${(avgTimeSaved / 60).toFixed(1)}m`,
             trend: 0,
             trendLabel: 'Efficiency',
             subtext: 'Labor reclaimed',

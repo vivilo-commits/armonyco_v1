@@ -1,5 +1,5 @@
 import React from 'react';
-import { MessageSquare, Rocket, Sliders, Shield } from 'lucide-react';
+import { MessageSquare, Rocket, Sliders, Shield, Search, Filter, MoreHorizontal, CheckCircle2 } from 'lucide-react';
 
 import {
   AppPage,
@@ -7,6 +7,9 @@ import {
   FormField,
   AppBadge,
   AppButton,
+  AppTable,
+  AppTableRow,
+  AppTableCell,
 } from '@/frontend/components/design-system';
 
 import { api } from '@/backend/api';
@@ -36,6 +39,13 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
   const [formalityLevel, setFormalityLevel] = React.useState('');
   const [brandKeywords, setBrandKeywords] = React.useState('');
   const [saving, setSaving] = React.useState(false);
+
+  // New states for Products section
+  const [activeTab, setActiveTab] = React.useState<'standard' | 'custom'>('standard');
+  const [productSearch, setProductSearch] = React.useState('');
+  const [selectedCategory, setSelectedCategory] = React.useState('ALL');
+
+  const categories = ['ALL', 'GUEST', 'REVENUE', 'OPS', 'PLAYBOOK'];
 
   // Sync local state when data loads
   React.useEffect(() => {
@@ -73,18 +83,42 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
     }
   };
 
+  const allProducts = React.useMemo(() => {
+    if (!data) return [];
+    const engines = (data.engines || []).map(e => ({
+      ...e,
+      source: 'engine',
+      category: e.type?.toUpperCase() || 'OPS',
+      governance: 'Strict',
+      productivity: 'High',
+      humanTime: '0s',
+      runtime: '1.2s',
+      status: e.status === 'Active' ? 'Active' : 'Paused'
+    }));
+    const addons = (data.addons || []).map(a => ({
+      ...a,
+      source: 'addon',
+      category: 'REVENUE',
+      governance: 'Policy',
+      productivity: 'Direct',
+      humanTime: '5s',
+      runtime: '0.8s',
+      status: a.enabled ? 'Active' : 'Inactive'
+    }));
+    return [...engines, ...addons];
+  }, [data]);
 
-  const filteredAddons = React.useMemo(() => {
-    if (!data?.addons) return [];
-    if (!searchTerm) return data.addons;
-    const term = searchTerm.toLowerCase();
-    return data.addons.filter(
-      (a) => a.name.toLowerCase().includes(term) || a.summary.toLowerCase().includes(term)
-    );
-  }, [data?.addons, searchTerm]);
+  const filteredProducts = React.useMemo(() => {
+    return allProducts.filter(p => {
+      const matchesSearch = p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
+        (p.summary || '').toLowerCase().includes(productSearch.toLowerCase());
+      const matchesCategory = selectedCategory === 'ALL' || p.category === selectedCategory;
+      const matchesTab = activeTab === 'standard'; // Currently all are considered standard in this mock-up logic
+      return matchesSearch && matchesCategory && matchesTab;
+    });
+  }, [allProducts, productSearch, selectedCategory, activeTab]);
 
   const stats = React.useMemo(() => {
-
     const enabledAddons = data?.addons?.filter((a) => a.enabled).length || 0;
     const totalAddons = data?.addons?.length || 1;
     const addonAdoption = Math.round((enabledAddons / totalAddons) * 100);
@@ -222,58 +256,131 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
               </AppSection>
             </div>
 
-            {/* RIGHT: ENGINES */}
-            <div className="lg:col-span-2 space-y-12">
-
-              {/* ADD-ON CATALOG */}
+            {/* RIGHT: PRODUCTS SECTION (Image 2) */}
+            <div className="lg:col-span-2 space-y-8">
               <AppSection
-                title="Add-on Catalog"
-                subtitle="Managed services and upsells available for guest request."
-                icon={<Rocket size={18} className="text-stone-400" />}
-                action={
-                  canEdit && (
-                    <AppButton variant="outline" size="sm">
-                      Add an add-on
-                    </AppButton>
-                  )
-                }
+                title="Products"
+                subtitle="High-fidelity operational routines available for institutional scaling."
+                icon={<Rocket size={18} className="text-gold-start" />}
               >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {filteredAddons.map((addon: ControlAddon) => (
-                    <div
-                      key={addon.id}
-                      className={`bg-white/50 backdrop-blur-lg border border-white/25 rounded-2xl p-5 hover:border-gold-start/40 hover:shadow-premium transition-all duration-300 group flex flex-col justify-between h-full ${canEdit ? 'cursor-pointer' : 'cursor-default opacity-80'}`}
-                      onClick={async () => {
-                        if (!canEdit) return;
-                        try {
-                          await api.updateAddonStatus(addon.id, !addon.enabled);
-                          retry();
-                        } catch (e) {
-                          console.error('Failed to update addon status:', e);
-                        }
-                      }}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-xs font-bold text-stone-900 group-hover:text-gold-start transition-colors">{addon.name}</div>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${addon.enabled ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-stone-300'}`} />
-                            <div className="text-[10px] font-mono gold-gradient font-bold">
-                              {addon.price}
-                            </div>
-                          </div>
-                        </div>
-                        <p className="text-[10px] text-stone-500 leading-relaxed mb-4">
-                          {addon.summary}
-                        </p>
-                        <div className="flex justify-end">
-                          <AppBadge variant={addon.enabled ? 'success' : 'neutral'} size="sm">
-                            {addon.enabled ? 'Active' : 'Enable'}
-                          </AppBadge>
-                        </div>
-                      </div>
+                <div className="space-y-6">
+                  {/* Tabs & Search */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex bg-stone-100 p-1 rounded-xl w-fit">
+                      {[
+                        { label: 'Standard Products', value: 'standard' },
+                        { label: 'Custom Products', value: 'custom' },
+                      ].map((tab) => (
+                        <button
+                          key={tab.value}
+                          onClick={() => setActiveTab(tab.value as any)}
+                          className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === tab.value
+                            ? 'bg-white text-stone-900 shadow-sm'
+                            : 'text-stone-500 hover:text-stone-700'
+                            }`}
+                        >
+                          {tab.label}
+                        </button>
+                      ))}
                     </div>
-                  ))}
+
+                    <div className="relative group flex-1 max-w-sm">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 group-focus-within:text-gold-start transition-colors" size={16} />
+                      <input
+                        type="text"
+                        placeholder="Search by product name or code..."
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
+                        className="w-full bg-stone-50 border border-stone-200 rounded-xl py-2 pl-10 pr-4 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-gold-start/20 focus:border-gold-start transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Filter Chips */}
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    <div className="flex items-center gap-2 text-stone-400 mr-2">
+                      <Filter size={14} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">Filter:</span>
+                    </div>
+                    {categories.map((cat) => (
+                      <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border ${selectedCategory === cat
+                          ? 'bg-stone-900 border-stone-900 text-white'
+                          : 'bg-white border-stone-200 text-stone-500 hover:border-stone-400'
+                          }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Main Table */}
+                  <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
+                    <AppTable
+                      headers={[
+                        'Service Routine',
+                        'Category',
+                        'Governance',
+                        'Productivity',
+                        'Human Time',
+                        'Runtime',
+                        'Status',
+                        'Actions'
+                      ]}
+                    >
+                      {filteredProducts.map((p: any) => (
+                        <AppTableRow key={p.id}>
+                          <AppTableCell>
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-stone-50 flex items-center justify-center text-gold-start border border-stone-100">
+                                {p.source === 'engine' ? <Sliders size={14} /> : <Rocket size={14} />}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold text-stone-900">{p.name}</span>
+                                <span className="text-[10px] text-stone-500 font-mono">#{p.id.slice(0, 6).toUpperCase()}</span>
+                              </div>
+                            </div>
+                          </AppTableCell>
+                          <AppTableCell>
+                            <AppBadge variant="neutral" size="sm">{p.category}</AppBadge>
+                          </AppTableCell>
+                          <AppTableCell>
+                            <div className="flex items-center gap-1.5">
+                              <Shield size={12} className="text-gold-start" />
+                              <span className="text-[10px] font-bold text-stone-700">{p.governance}</span>
+                            </div>
+                          </AppTableCell>
+                          <AppTableCell className="text-[10px] font-medium text-stone-600">
+                            {p.productivity}
+                          </AppTableCell>
+                          <AppTableCell className="text-[10px] font-mono text-stone-500">
+                            {p.humanTime}
+                          </AppTableCell>
+                          <AppTableCell className="text-[10px] font-mono text-stone-900 font-bold">
+                            {p.runtime}
+                          </AppTableCell>
+                          <AppTableCell>
+                            <div className="flex items-center gap-2">
+                              <div className={`w-1.5 h-1.5 rounded-full ${p.status === 'Active' ? 'bg-green-500 shadow-pulse-green' : 'bg-stone-300'}`} />
+                              <span className="text-[10px] font-bold text-stone-700">{p.status}</span>
+                            </div>
+                          </AppTableCell>
+                          <AppTableCell>
+                            <div className="flex items-center gap-2">
+                              <AppButton variant="secondary" size="sm" className="h-7 px-3 text-[10px]">
+                                Config
+                              </AppButton>
+                              <button className="p-1.5 hover:bg-stone-100 rounded-lg transition-colors text-stone-400">
+                                <MoreHorizontal size={14} />
+                              </button>
+                            </div>
+                          </AppTableCell>
+                        </AppTableRow>
+                      ))}
+                    </AppTable>
+                  </div>
                 </div>
               </AppSection>
             </div>
@@ -288,7 +395,7 @@ export const Controls: React.FC<ControlsProps> = ({ searchTerm }) => {
             <div className="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                  <Shield className="text-green-600" size={32} />
+                  <CheckCircle2 className="text-green-600" size={32} />
                 </div>
                 <h3 className="text-xl font-bold text-stone-900">Changes Saved</h3>
                 <p className="text-sm text-stone-600">

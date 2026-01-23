@@ -25,7 +25,28 @@ import { GovernanceAuditModal } from '@/frontend/components/modals/GovernanceAud
 import { Building2 } from 'lucide-react';
 
 export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => {
-  const { data, loading, error, retry } = usePageData(() => api.getDashboardData());
+  const [period, setPeriod] = React.useState('all');
+
+  const dateRange = React.useMemo(() => {
+    if (period === 'all') return { start: undefined, end: undefined };
+    const end = new Date();
+    const start = new Date();
+    if (period === '7d') start.setDate(end.getDate() - 7);
+    if (period === '30d') start.setDate(end.getDate() - 30);
+    return {
+      start: start.toISOString(),
+      end: end.toISOString()
+    };
+  }, [period]);
+
+  const { data, loading, error, retry } = usePageData(() =>
+    api.getDashboardData(dateRange.start, dateRange.end)
+  );
+
+  React.useEffect(() => {
+    retry();
+  }, [period, retry]);
+
   const [selectedEvent, setSelectedEvent] = React.useState<ExecutionEvent | null>(null);
   const [isPMSModalOpen, setIsPMSModalOpen] = React.useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = React.useState(false);
@@ -57,21 +78,41 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
         }
       }}
       actions={
-        <div className="flex gap-2">
-          <AppButton
-            variant="secondary"
-            size="sm"
-            icon={<Shield size={14} />}
-            onClick={() => setIsAuditModalOpen(true)}
-          >
-            Governance Audit
-          </AppButton>
-          <AppBadge
-            variant="success"
-            icon={<div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
-          >
-            System Operational
-          </AppBadge>
+        <div className="flex gap-4 items-center">
+          <div className="flex bg-stone-100 p-1 rounded-xl">
+            {[
+              { label: 'All time', value: 'all' },
+              { label: '7D', value: '7d' },
+              { label: '30D', value: '30d' },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${period === p.value
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-400 hover:text-stone-600'
+                  }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <AppButton
+              variant="secondary"
+              size="sm"
+              icon={<Shield size={14} />}
+              onClick={() => setIsAuditModalOpen(true)}
+            >
+              Governance Audit
+            </AppButton>
+            <AppBadge
+              variant="success"
+              icon={<div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
+            >
+              System Operational
+            </AppBadge>
+          </div>
         </div>
       }
     >
@@ -148,9 +189,8 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
             headers={[
               'ID',
               'Workflow',
+              'Scope',
               'Status',
-              'Started',
-              'Stopped',
               'Duration',
               'Verdict',
               'Escalation',
@@ -168,20 +208,19 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
                     {ev.type}
                   </AppTableCell>
                   <AppTableCell>
-                    <AppBadge variant={getStatusVariant(ev.status)}>{ev.status}</AppBadge>
+                    <AppBadge variant={ev.is_multiple ? 'info' : 'neutral'} size="sm">
+                      {ev.is_multiple ? 'Multiple' : 'Single'}
+                    </AppBadge>
                   </AppTableCell>
-                  <AppTableCell className="text-stone-400 font-mono text-xs">
-                    {ev.started || '—'}
-                  </AppTableCell>
-                  <AppTableCell className="text-stone-400 font-mono text-xs">
-                    {ev.stopped || '—'}
+                  <AppTableCell>
+                    <AppBadge variant={getStatusVariant(ev.status)} size="sm">{ev.status}</AppBadge>
                   </AppTableCell>
                   <AppTableCell className="text-stone-500 text-xs font-mono">
                     {ev.duration || '—'}
                   </AppTableCell>
                   <AppTableCell className="text-xs font-mono">
                     {ev.verdict ? (
-                      <AppBadge variant={ev.verdict === 'PASSED' ? 'success' : 'warning'}>
+                      <AppBadge variant={ev.verdict === 'PASSED' ? 'success' : 'warning'} size="sm">
                         {ev.verdict}
                       </AppBadge>
                     ) : <span className="text-stone-600">N/A</span>}
@@ -199,7 +238,7 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
               ))
             ) : (
               <AppTableRow>
-                <AppTableCell colSpan={10} className="py-20 text-center">
+                <AppTableCell colSpan={9} className="py-20 text-center">
                   <AppEmptyState
                     title="Stream Idle"
                     description="No recording events detected. Your execution audit trail will appear here once the system is active."

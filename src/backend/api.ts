@@ -202,21 +202,30 @@ class ApiService {
         value_captured: exec.value_captured && exec.value_captured > 0 ? exec.value_captured : undefined,
         messages_sent: exec.messages_sent && exec.messages_sent > 0 ? exec.messages_sent : undefined,
         time_saved: exec.time_saved_seconds && exec.time_saved_seconds > 0 ? formatTime(exec.time_saved_seconds) : undefined,
+        is_multiple: (exec.messages_sent || 0) > 1,
 
         // Legacy fields
         agent: exec.workflow_name === 'Lara' ? 'Lara-v2' : 'Amelia-v4',
-        risk: 'Low'
+        risk: 'Low',
+        workflow_output: exec.workflow_output
       };
     });
 
     // Use cashflow aggregation and accurate escalation count for KPIs
-    // Filter by organization_id for accurate count
+    // Filter by organization_id and date range for accurate count
     let messageQuery = supabase
       .from('vivilo_whatsapp_history')
       .select('*', { count: 'exact', head: true });
 
     if (this.organizationId) {
       messageQuery = messageQuery.eq('organization_id', this.organizationId);
+    }
+
+    if (startDate) {
+      messageQuery = messageQuery.gte('created_at', startDate);
+    }
+    if (endDate) {
+      messageQuery = messageQuery.lte('created_at', endDate);
     }
 
     const { count: trueMessageCount } = await messageQuery;
@@ -302,12 +311,14 @@ class ApiService {
       ? Math.round((safeExecutions.filter(e => !e.human_escalation_triggered).length / safeExecutions.length) * 100)
       : 0;
 
+    const totalValueSaved = totalHoursSaved * 17;
+
     const valueCreated = [
+      { label: 'Value Saved', value: formatCurrency(totalValueSaved) },
       { label: 'Hours Saved', value: `${totalHoursSaved.toFixed(1)}h` },
       { label: 'Escalations Resolved', value: String(resolvedEscalations.length) },
       { label: 'Escalations Open', value: String(openEscalations.length) },
       { label: 'Automation Rate', value: `${automationRate}%` },
-      { label: 'Total Escalations', value: String(executionsWithHumanIntervention.length) },
       { label: 'Resolution Rate', value: executionsWithHumanIntervention.length > 0 ? `${Math.round((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100)}%` : '0%' },
     ];
 

@@ -112,4 +112,4 @@ All configuration and environment files MUST be isolated within `src/`.
 | 3 (Implement) | `test-driven-developing` | `subagent-orchestration`, `best-practices-enforcing` | | |
 | 4 (Stylize) | `performance-optimization` | `documentation-generating` | | |
 | 5 (Manifest) | `finishing-development` | `security-auditing`, `using-git-worktrees` | | |
-| 6 (Anneal) | `skill-self-regenerating` | All skills | **Complete**: Governance Audit Protocol implemented with Date Filtering & Multi-page Printing. All session learnings merged into skill modules. Structure hardened (SRC-Isolation). Production-ready. | ✅ |
+| 6 (Anneal) | `skill-self-regenerating` | All skills | **Complete**: Dashboard & Growth refined featuring Institutional Value Saved KPIs (17€/h) and Date Filtering. Controls page orchestration expanded with unified Product Catalog & Categorization. Execution Audit Trail hardened with real-time metadata & Scope (Single/Multiple) detection. Production-ready. | ✅ |

@@ -122,23 +122,23 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           title="Value Created"
           subtitle="Efficiency and risk reduction that compounds over time."
         >
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
             {(data?.valueCreated || [
+              { label: 'Value Saved', value: '€ 0,00' },
               { label: 'Hours Saved', value: '0h' },
-              { label: 'Escalations Avoided', value: '0' },
-              { label: 'Response Time', value: '< 2min' },
+              { label: 'Escalations Resolved', value: '0' },
+              { label: 'Escalations Open', value: '0' },
               { label: 'Automation Rate', value: '0%' },
-              { label: 'Guest Satisfaction', value: '0%' },
-              { label: 'Cost Savings', value: '€ 0,00' },
+              { label: 'Resolution Rate', value: '0%' },
             ]).map((item: any, i: number) => (
               <AppKPICard
                 key={i}
-                variant="light"
+                variant={i === 0 ? 'gold' : 'light'}
                 kpi={{
                   id: `v-cre-${i}`,
                   label: item.label,
                   value: item.value,
-                  subtext: '',
+                  subtext: i === 0 ? 'Institutional Savings' : '',
                   trend: 0,
                   trendLabel: '',
                   status: 'neutral',

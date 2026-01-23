@@ -1,19 +1,12 @@
 import React from 'react';
 import { BaseModal, AppCard, AppBadge, AppButton } from '../design-system';
 import { ShieldCheck, Layers, Database, ChevronRight } from 'lucide-react';
+import { ExecutionEvent } from '@/backend/types';
 
 interface ExecutionDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
-  event: {
-    id: string;
-    type: string;
-    status: string;
-    verdict?: string;
-    risk?: string;
-    time?: string;
-    duration?: string;
-  } | null;
+  event: ExecutionEvent | null;
 }
 
 export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
@@ -32,7 +25,7 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
             <div className="text-[9px] text-stone-400 uppercase tracking-widest font-bold mb-1">
               Status
             </div>
-            <AppBadge variant="success" size="sm">
+            <AppBadge variant={event.status.toLowerCase().includes('fail') ? 'error' : 'success'} size="sm">
               {event.status}
             </AppBadge>
           </AppCard>
@@ -41,20 +34,20 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
               Verdict
             </div>
             <div className="text-xs font-mono font-bold text-stone-900">
-              {event.verdict || 'PASSED'}
+              {event.verdict || 'N/A'}
             </div>
           </AppCard>
           <AppCard variant="light" className="p-4 border-l-4 border-l-stone-200">
             <div className="text-[9px] text-stone-400 uppercase tracking-widest font-bold mb-1">
               Duration
             </div>
-            <div className="text-xs font-mono text-stone-900">{event.duration || '0.8s'}</div>
+            <div className="text-xs font-mono text-stone-900">{event.duration || '—'}</div>
           </AppCard>
           <AppCard variant="light" className="p-4 border-l-4 border-l-orange-400">
             <div className="text-[9px] text-stone-400 uppercase tracking-widest font-bold mb-1">
-              Risk Score
+              Complexity
             </div>
-            <div className="text-xs font-bold text-stone-900">{event.risk || 'Low'}</div>
+            <div className="text-xs font-bold text-stone-900">{event.is_multiple ? 'Multiple' : 'Single'}</div>
           </AppCard>
         </div>
 
@@ -63,31 +56,31 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
           <div className="flex items-center gap-2 px-1">
             <Layers size={16} className="text-stone-400" />
             <h5 className="text-[10px] font-bold uppercase tracking-widest text-stone-500">
-              Execution Path
+              Execution Trace
             </h5>
           </div>
           <div className="space-y-3">
             {[
               {
-                step: 'Input Validation',
-                desc: 'Verified guest identity and booking status',
+                step: 'Workflow Initiation',
+                desc: `Started ${event.type} protocol`,
                 time: '0ms',
               },
               {
-                step: 'Policy Retrieval',
-                desc: 'Retrieved "Refund_Policy_v2" from memory',
+                step: 'Governance Check',
+                desc: `Verdict: ${event.verdict || 'PENDING'}`,
                 time: '120ms',
               },
               {
-                step: 'Cognitive Analysis',
-                desc: 'Amelia-v4 evaluated request vs constraints',
+                step: 'Agent Context',
+                desc: `Operating as ${event.agent || 'Amelia-v4'}`,
                 time: '450ms',
               },
-              {
-                step: 'Action Execution',
-                desc: 'Applied approved adjustment to PMS',
+              ...(event.messages_sent ? [{
+                step: 'Communication',
+                desc: `Sent ${event.messages_sent} message(s) via WhatsApp`,
                 time: '210ms',
-              },
+              }] : []),
             ].map((step, i) => (
               <div
                 key={i}
@@ -117,26 +110,16 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
               Truth Data (JSON)
             </h5>
           </div>
-          <div className="bg-stone-900 rounded-2xl p-6 font-mono text-[11px] text-stone-300 leading-relaxed overflow-x-auto shadow-inner">
+          <div className="bg-stone-900 rounded-2xl p-6 font-mono text-[11px] text-stone-300 leading-relaxed overflow-x-auto shadow-inner max-h-[300px]">
             <pre>
-              {`{
-  "id": "${event.id}",
-  "workflow": "${event.type}",
-  "agent_id": "amelia_v4_institutional",
-  "payload": {
-    "guest_id": "G-9021",
-    "request_type": "LATE_CHECKOUT",
-    "requested_time": "14:00",
-    "pms_synced": true,
-    "revenue_captured": 25.00
-  },
-  "governance": {
-    "policy_id": "POL-882",
-    "override_detected": false,
-    "human_review": "NOT_REQUIRED"
-  },
-  "timestamp": "2024-05-20T14:02:12Z"
-}`}
+              {JSON.stringify({
+                id: event.id,
+                workflow: event.type,
+                agent_id: event.agent,
+                workflow_output: event.workflow_output,
+                risk: event.risk,
+                verdict: event.verdict
+              }, null, 2)}
             </pre>
           </div>
         </div>
