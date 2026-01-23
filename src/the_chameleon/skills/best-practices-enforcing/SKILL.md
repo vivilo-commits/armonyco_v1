@@ -42,3 +42,11 @@ triggers:
 2. **Aggressive Sanitization**:
    - Strip LLM "reasoning" indicators (e.g., "time: ", "plan: ", "Think:") from operator-facing contexts.
    - Maintain an institutional, non-technical appearance at all times.
+
+## Principle 18: Zero-Gordura (Zero-Fat) Policy
+1. **Rule of One**: There is only ONE source of truth for every logic piece (e.g., `utils.ts` for currency parsing, `api.ts` for data fetching). Never duplicate logic to "save time".
+2. **Configuration Consolidation**: All tool configurations (Git, Vercel, Vite, Tailwind) MUST live in exactly ONE location matching the project's SRC-Isolation policy. Duplicated `.gitignore`, `.env`, or configuration files are considered "technical debt" and must be merged immediately.
+3. **Ghost Suppression**: During the Annealing phase, actively hunt for and delete "ghost" files:
+   - Abandoned backups or `_old` file versions.
+   - Redundant templates or legacy build outputs.
+   - Config files that have been superseded by centralized versions.

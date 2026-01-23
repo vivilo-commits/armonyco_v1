@@ -66,7 +66,9 @@ description: Meta-skill for inheritance and project-specific evolution. Orchestr
 ### 2. Data-First Rule
 Coding begins only once the **Data Payload** shape is confirmed in `gemini.md`.
 
-### 3. Zero-Mistake Memory
-Analyze -> Patch -> Test -> Update Architecture -> Never Repeat.
+### 4. Zero-Gordura Directive (Minimalism)
+- **Zero Redundancy**: Never create parallel systems, files, or folders if one already exists.
+- **Aggressive Consolidation**: Prioritize merging logic and configurations into central "Sources of Truth".
+- **Absolute Cleanliness**: Deleted or archived files MUST be physically removed or properly isolated. Root directories must be "hospital-clean".
 
 **Golden Rule**: If project logic changes, update the architecture SOP before updating the code.
