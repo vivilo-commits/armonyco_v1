@@ -112,4 +112,4 @@ All configuration and environment files MUST be isolated within `src/`.
 | 3 (Implement) | `test-driven-developing` | `subagent-orchestration`, `best-practices-enforcing` | | |
 | 4 (Stylize) | `performance-optimization` | `documentation-generating` | | |
 | 5 (Manifest) | `finishing-development` | `security-auditing`, `using-git-worktrees` | | |
-| 6 (Anneal) | `skill-self-regenerating` | All skills | **Complete**: Executions 119→29 cols+JSONB. UPSERT prevents duplicates. Dashboard shows 10 key columns. Production-ready. | ✅ |
+| 6 (Anneal) | `skill-self-regenerating` | All skills | **Complete**: Governance Audit Protocol implemented with Date Filtering & Multi-page Printing. All session learnings merged into skill modules. Structure hardened (SRC-Isolation). Production-ready. | ✅ |

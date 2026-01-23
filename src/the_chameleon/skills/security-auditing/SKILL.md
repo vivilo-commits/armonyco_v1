@@ -198,6 +198,21 @@ SELECT * FROM ${tableName}; -- ❌ DANGEROUS
 -- Use whitelist validation instead
 const allowedTables = ['users', 'posts'];
 if (!allowedTables.includes(tableName)) throw new Error('Invalid table');
+
+-- Multi-Tenancy Trigger Security (RLS Enforcement)
+-- Database triggers MUST always filter by organization_id to prevent cross-tenant collisions.
+CREATE OR REPLACE FUNCTION trigger_name() RETURNS trigger AS $$
+BEGIN
+  -- ❌ WRONG: Missing tenant isolation
+  -- SELECT id FROM target WHERE execution_id = NEW.execution_id;
+  
+  -- ✅ CORRECT: Tenant-isolated lookup
+  SELECT id FROM target 
+  WHERE organization_id = NEW.organization_id 
+  AND execution_id = NEW.execution_id;
+  ...
+END;
+$$ LANGUAGE plpgsql;
 ```
 
 ### Step 6: API Security

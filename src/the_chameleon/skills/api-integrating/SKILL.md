@@ -27,12 +27,10 @@ triggers:
 - [ ] **Workflow Standards**: Implement retry logic with exponential backoff for transient failures.
 - [ ] **Error Handling**: Every HTTP request MUST have a fail-safe or fallback path.
 
-### 2. Client Implementation
-- [ ] Create type-safe API client
-- [ ] Implement authentication
-- [ ] Add retry logic and error handling
-- [ ] Implement rate limiting
-- [ ] Add request/response logging
+### 3. Advanced Integration Patterns
+- [ ] **Data Deduplication**: When merging multiple tables (e.g., `executions` + `escalations`), use `Set` tracking for unique IDs from the primary source to filter the secondary source.
+- [ ] **n8n Plumbing**: Automation hubs are often observers. Real database writes usually happen via Supabase Triggers. Verify `organization_id` in both sender and receiver workflows.
+- [ ] **Detection Fallbacks**: Never rely on a single boolean flag. Check for metadata presence (status, reason) as a fallback to catch data patterns from different automation sources.
 
 ## Instructions
 
