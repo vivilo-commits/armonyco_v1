@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { PLANS_DATA } from '@/frontend/constants';
 import { BaseModal } from '../design-system/BaseModal';
-import { stripeApi, STRIPE_CONFIG } from '@/backend/stripe-api';
+import { stripeApi } from '@/backend/stripe-api';
 import { useAuth } from '@/frontend/contexts/AuthContext';
 
 interface PlansProps {
@@ -15,26 +15,15 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
   const { organizationId, user, entitlements } = useAuth();
   const currentPlanId = entitlements?.plan_tier?.toLowerCase() || 'starter';
 
-  const handleBuyCredits = async () => {
-    if (!organizationId || !user?.email) return;
-    setBuying(true);
-    try {
-      const { url } = await stripeApi.createCheckoutSession({
-        priceId: STRIPE_CONFIG.TIERS.TOP_UP.priceId,
-        organizationId,
-        email: user.email,
-        planName: STRIPE_CONFIG.TIERS.TOP_UP.name,
-        credits: STRIPE_CONFIG.TIERS.TOP_UP.credits,
-        mode: 'payment'
-      });
-      window.location.href = url;
-    } catch (error) {
-      console.error('[PlansModal] Checkout failed:', error);
-      alert('Failed to initiate checkout. Please try again.');
-    } finally {
-      setBuying(false);
-    }
+  const PLAN_RANKS: Record<string, number> = {
+    'starter': 0,
+    'pro': 1,
+    'elite': 2,
+    'vip': 3
   };
+
+  const currentPlanRank = PLAN_RANKS[currentPlanId] || 0;
+
 
   const handleSelectPlan = async (priceId?: string, planData?: typeof PLANS_DATA[0]) => {
     if (!priceId || !organizationId || !user?.email) return;
@@ -62,8 +51,8 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
     <BaseModal
       isOpen={isOpen}
       onClose={onClose}
-      title="Governance Tiers & Capacity"
-      subtitle="Manage your execution governance and ArmoCredit balance."
+      title="Governance Tiers"
+      subtitle="Select the institutional capacity that best fits your volume."
       maxWidth="max-w-6xl"
       footer={
         <div className="w-full flex justify-between items-center">
@@ -80,31 +69,6 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
       }
     >
       <div className="space-y-12 pb-4">
-        {/* Balance Banner */}
-        <div className="bg-stone-900 text-white rounded-2xl p-8 shadow-premium flex items-center justify-between relative overflow-hidden">
-          <div className="absolute right-0 top-0 w-64 h-64 gold-gradient opacity-10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-
-          <div className="relative z-10">
-            <p className="text-stone-400 text-[10px] font-bold uppercase tracking-widest mb-3">
-              Available ArmoCredits
-            </p>
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-light tracking-tighter text-gold-gradient">
-                14,250
-              </span>
-              <span className="text-stone-500 text-lg font-medium">Credits</span>
-            </div>
-          </div>
-          <div className="text-right relative z-10 space-y-3">
-            <button
-              onClick={handleBuyCredits}
-              disabled={buying}
-              className="px-6 py-3 bg-white text-stone-900 text-[10px] font-bold uppercase tracking-widest rounded-xl hover:bg-stone-50 transition-all shadow-lg disabled:opacity-70 border border-stone-100"
-            >
-              {buying ? 'Processing...' : 'Expand Capacity'}
-            </button>
-          </div>
-        </div>
 
         {/* PLANS GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -167,10 +131,10 @@ export const Plans: React.FC<PlansProps> = ({ isOpen, onClose }) => {
                   onClick={() => handleSelectPlan(plan.stripePriceId, plan)}
                   disabled={buying || !plan.stripePriceId || currentPlanId === plan.id}
                   className={`w-full py-3 font-bold rounded-xl text-[10px] uppercase tracking-widest transition-all ${isPopular
-                      ? 'bg-white text-stone-900 hover:bg-stone-50'
-                      : currentPlanId === plan.id
-                        ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
-                        : 'bg-stone-900 text-white hover:bg-stone-800 shadow-md'
+                    ? 'bg-white text-stone-900 hover:bg-stone-50'
+                    : currentPlanId === plan.id
+                      ? 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                      : 'bg-stone-900 text-white hover:bg-stone-800 shadow-md'
                     } disabled:opacity-50`}
                 >
                   {buying ? 'Redirecting...' : currentPlanId === plan.id ? 'Current Plan' : plan.cta}

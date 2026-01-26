@@ -30,6 +30,9 @@ import { ConfigureWhatsAppModal } from '@/frontend/components/modals/ConfigureWh
 import { ConfigurePMSModal } from '@/frontend/components/modals/ConfigurePMSModal';
 import { UploadKnowledgeModal } from '@/frontend/components/modals/UploadKnowledgeModal';
 import { Plans } from '@/frontend/components/modals/PlansModal';
+import { RechargeModal } from '@/frontend/components/modals/RechargeModal';
+import { CreditTransaction } from '@/backend/types';
+import { Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 import { api } from '@/backend/api';
 import { usePageData } from '@/frontend/hooks/usePageData';
@@ -63,7 +66,7 @@ export const Settings: React.FC = () => {
   const [pmsModalOpen, setPmsModalOpen] = useState(false);
   const [knowledgeModalOpen, setKnowledgeModalOpen] = useState(false);
   const [plansModalOpen, setPlansModalOpen] = useState(false);
-  const [refilling, setRefilling] = useState(false);
+  const [rechargeModalOpen, setRechargeModalOpen] = useState(false);
 
   // Editable fields - Identity
   const [fullName, setFullName] = useState('');
@@ -97,6 +100,8 @@ export const Settings: React.FC = () => {
   const [newRole, setNewRole] = useState('viewer');
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(false);
 
   useEffect(() => {
     if (entitlements) {
@@ -128,6 +133,9 @@ export const Settings: React.FC = () => {
     if (activeTab === 'ORGANIZATION') {
       fetchTeamMembers();
     }
+    if (activeTab === 'SUBSCRIPTION') {
+      fetchTransactions();
+    }
   }, [activeTab]);
 
   const fetchTeamMembers = async () => {
@@ -139,6 +147,18 @@ export const Settings: React.FC = () => {
       console.error('Failed to fetch team members:', e);
     } finally {
       setLoadingTeam(false);
+    }
+  };
+
+  const fetchTransactions = async () => {
+    setLoadingTransactions(true);
+    try {
+      const data = await api.getCreditTransactions();
+      setTransactions(data || []);
+    } catch (e) {
+      console.error('Failed to fetch transactions:', e);
+    } finally {
+      setLoadingTransactions(false);
     }
   };
 
@@ -255,26 +275,8 @@ export const Settings: React.FC = () => {
     }
   };
 
-  const handleBuyCredits = async () => {
-    if (!organization || !profile?.email) return;
-    setRefilling(true);
-    try {
-      const { stripeApi, STRIPE_CONFIG } = await import('@/backend/stripe-api');
-      const { url } = await stripeApi.createCheckoutSession({
-        priceId: STRIPE_CONFIG.TIERS.TOP_UP.priceId,
-        organizationId: organization.id,
-        email: profile.email,
-        planName: STRIPE_CONFIG.TIERS.TOP_UP.name,
-        credits: STRIPE_CONFIG.TIERS.TOP_UP.credits,
-        mode: 'payment'
-      });
-      window.location.href = url;
-    } catch (error) {
-      console.error('[Settings] Refill failed:', error);
-      alert('Failed to initiate checkout. Please try again.');
-    } finally {
-      setRefilling(false);
-    }
+  const handleBuyCredits = () => {
+    setRechargeModalOpen(true);
   };
 
   const handleToggleAutoTopup = async (enabled: boolean) => {
@@ -822,7 +824,6 @@ export const Settings: React.FC = () => {
                           className="w-full"
                           icon={<Zap size={16} />}
                           onClick={handleBuyCredits}
-                          loading={refilling}
                         >
                           Add Credits Now
                         </AppButton>
@@ -840,21 +841,105 @@ export const Settings: React.FC = () => {
                         <button
                           disabled={!canEdit}
                           onClick={() => handleToggleAutoTopup(!autoTopupEnabled)}
-                          className={`w-10 h-5 rounded-full transition-all relative ${autoTopupEnabled ? 'bg-gold-start' : 'bg-stone-300'} ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          className={`w-10 h-5 rounded-full transition-all relative ${autoTopupEnabled ? 'bg-stone-900' : 'bg-stone-300'} ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
                           <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${autoTopupEnabled ? 'left-6' : 'left-1'}`} />
                         </button>
                       </div>
                       <p className="text-sm text-stone-600 mb-6 font-medium leading-relaxed">
                         {autoTopupEnabled
-                          ? `Automatically add ${autoTopupAmount} credits when balance falls below ${autoTopupThreshold}.`
+                          ? `Automatically add ${autoTopupAmount.toLocaleString()} credits when balance falls below ${autoTopupThreshold.toLocaleString()}.`
                           : "Credit balance is currently managed manually. System will pause at zero."}
                       </p>
                       {canEdit && (
-                        <AppButton variant="outline" size="sm" className="w-full">
-                          Manage Auto Top-up
-                        </AppButton>
+                        <div className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Threshold</label>
+                              <select
+                                value={autoTopupThreshold}
+                                onChange={(e) => setAutoTopupThreshold(parseInt(e.target.value))}
+                                className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                              >
+                                <option value={5000}>5,000</option>
+                                <option value={10000}>10,000</option>
+                                <option value={25000}>25,000</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-stone-400 font-bold uppercase tracking-widest">Amount</label>
+                              <select
+                                value={autoTopupAmount}
+                                onChange={(e) => setAutoTopupAmount(parseInt(e.target.value))}
+                                className="w-full bg-white border border-stone-200 rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-stone-900 focus:outline-none"
+                              >
+                                <option value={50000}>50,000</option>
+                                <option value={100000}>100,000</option>
+                                <option value={200000}>200,000</option>
+                              </select>
+                            </div>
+                          </div>
+                          <AppButton
+                            variant="outline"
+                            size="sm"
+                            className="w-full"
+                            onClick={() => api.updateAutoTopup(autoTopupEnabled, autoTopupThreshold, autoTopupAmount).then(() => setSaveMessage('Auto top-up settings updated!'))}
+                          >
+                            Update Configuration
+                          </AppButton>
+                        </div>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Transaction History */}
+                  <div className="mt-12">
+                    <h3 className="text-lg font-bold text-stone-900 mb-6 flex items-center gap-2">
+                      <Clock size={20} className="text-stone-400" /> Credit History
+                    </h3>
+                    <div className="bg-white border border-stone-200 rounded-3xl overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-stone-50 border-b border-stone-200">
+                            <th className="px-6 py-4 text-[10px] font-bold text-stone-400 uppercase tracking-widest">Date</th>
+                            <th className="px-6 py-4 text-[10px] font-bold text-stone-400 uppercase tracking-widest">Type</th>
+                            <th className="px-6 py-4 text-[10px] font-bold text-stone-400 uppercase tracking-widest text-right">Credits</th>
+                            <th className="px-6 py-4 text-[10px] font-bold text-stone-400 uppercase tracking-widest text-right">Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-stone-100">
+                          {loadingTransactions ? (
+                            <tr><td colSpan={4} className="px-6 py-12 text-center text-stone-400 animate-pulse">Loading history...</td></tr>
+                          ) : transactions.length === 0 ? (
+                            <tr><td colSpan={4} className="px-6 py-12 text-center text-stone-400 italic">No transactions found</td></tr>
+                          ) : (
+                            transactions.map((tx) => (
+                              <tr key={tx.id} className="hover:bg-stone-50/50 transition-colors">
+                                <td className="px-6 py-4 text-xs text-stone-500 whitespace-nowrap">
+                                  {new Date(tx.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex items-center gap-2">
+                                    {tx.transaction_type === 'purchase' || tx.transaction_type === 'bonus' ? (
+                                      <div className="p-1 bg-green-50 text-green-600 rounded-md"><ArrowUpRight size={14} /></div>
+                                    ) : (
+                                      <div className="p-1 bg-amber-50 text-amber-600 rounded-md"><ArrowDownRight size={14} /></div>
+                                    )}
+                                    <span className="text-xs font-bold text-stone-900 capitalize">{tx.transaction_type}</span>
+                                  </div>
+                                </td>
+                                <td className={`px-6 py-4 text-xs font-bold text-right ${tx.transaction_type === 'purchase' || tx.transaction_type === 'bonus' ? 'text-green-600' : 'text-stone-900'
+                                  }`}>
+                                  {tx.transaction_type === 'purchase' || tx.transaction_type === 'bonus' ? '+' : '-'}{tx.credits_used.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 text-xs font-mono text-stone-500 text-right">
+                                  {tx.credits_after.toLocaleString()}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
@@ -892,6 +977,13 @@ export const Settings: React.FC = () => {
         onClose={() => setKnowledgeModalOpen(false)}
       />
       <Plans isOpen={plansModalOpen} onClose={() => setPlansModalOpen(false)} />
+      <RechargeModal
+        isOpen={rechargeModalOpen}
+        onClose={() => setRechargeModalOpen(false)}
+        currentBalance={entitlements?.credits_balance || 0}
+        autoTopupEnabled={entitlements?.auto_topup_enabled}
+        onSuccess={refreshProfile}
+      />
     </AppPage>
   );
 };

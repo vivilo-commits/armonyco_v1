@@ -53,6 +53,7 @@ interface AuthContextType {
     sessionExpired: boolean;
     isAppBlocked: boolean;
     isCreditsBlocked: boolean;
+    isLowCredits: boolean;
     canEdit: boolean;
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
@@ -219,6 +220,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Block if: user is logged in AND (no entitlements OR subscription is not active)
     const isAppBlocked = !!user && (!entitlements || !entitlements.subscription_active);
     const isCreditsBlocked = !!user && !!entitlements && entitlements.subscription_active && entitlements.credits_balance <= 0;
+    const isLowCredits = !!user && !!entitlements && entitlements.subscription_active && entitlements.credits_balance > 0 && entitlements.credits_balance < 10000;
     const canEdit = membership ? ['owner', 'admin', 'manager'].includes(membership.role.toLowerCase()) : false;
 
     return (
@@ -234,6 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 sessionExpired,
                 isAppBlocked,
                 isCreditsBlocked,
+                isLowCredits,
                 canEdit,
                 signOut,
                 refreshProfile,

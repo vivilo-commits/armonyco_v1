@@ -27,6 +27,9 @@ const LandingPage = lazy(() => import('@/frontend/pages/landing').then((m) => ({
 const PlansModal = lazy(() =>
   import('@/frontend/components/modals/PlansModal').then((m) => ({ default: m.Plans }))
 );
+const RechargeModal = lazy(() =>
+  import('@/frontend/components/modals/RechargeModal').then((m) => ({ default: m.RechargeModal }))
+);
 
 import { LoginModal } from '@/frontend/components/modals/LoginModal';
 import { SignUpModal } from '@/frontend/components/modals/SignUpModal';
@@ -74,7 +77,7 @@ const AppContent: React.FC = () => {
     return View.LANDING;
   };
 
-  const { user, loading: authLoading, signOut, organizationId, sessionExpired } = useAuth();
+  const { user, loading: authLoading, signOut, organizationId, sessionExpired, entitlements, refreshProfile } = useAuth();
   const [currentView, setCurrentView] = useState<View>(getInitialView);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [escalationCount, setEscalationCount] = useState(0);
@@ -147,7 +150,7 @@ const AppContent: React.FC = () => {
   // Modal states
   const [showLogin, setShowLogin] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
-  const [activeModal, setActiveModal] = useState<'PLANS' | 'CONTACT' | null>(null);
+  const [activeModal, setActiveModal] = useState<'PLANS' | 'CONTACT' | 'RECHARGE' | null>(null);
 
   // Auto-close modals if user is already logged in
   React.useEffect(() => {
@@ -210,6 +213,16 @@ const AppContent: React.FC = () => {
       return <PlansModal isOpen={true} onClose={() => setActiveModal(null)} />;
     if (activeModal === 'CONTACT')
       return <ContactModal isOpen={true} onClose={() => setActiveModal(null)} />;
+    if (activeModal === 'RECHARGE')
+      return (
+        <RechargeModal
+          isOpen={true}
+          onClose={() => setActiveModal(null)}
+          currentBalance={entitlements?.credits_balance || 0}
+          autoTopupEnabled={entitlements?.auto_topup_enabled}
+          onSuccess={refreshProfile}
+        />
+      );
     return null;
   };
 
@@ -272,8 +285,8 @@ const AppContent: React.FC = () => {
         onOpenContact={() => setActiveModal('CONTACT')}
       >
         <CreditsGate
-          onBuyCredits={() => setActiveModal('PLANS')}
-          onEnableAutoTopup={() => setActiveModal('PLANS')}
+          onBuyCredits={() => setActiveModal('RECHARGE')}
+          onEnableAutoTopup={() => setActiveModal('RECHARGE')}
         >
           <CreditsDepletedBanner />
           <div className="flex h-screen w-screen font-sans bg-stone-50 text-stone-900 selection:bg-gold-start selection:text-white overflow-hidden">

@@ -8,7 +8,8 @@ import type {
   Verdict,
   WhatsAppHistory,
   CashflowSummary,
-  Conversation
+  Conversation,
+  CreditTransaction
 } from './types';
 import {
   calculateDashboardKPIs,
@@ -343,11 +344,12 @@ class ApiService {
 
   // --- Controls Data ---
 
-  async getControlsData() {
-    const [engines, addons, settings] = await Promise.all([
+  async getSettingsData() {
+    const [engines, addons, settings, entitlements] = await Promise.all([
       this.supabaseFetch<ControlEngine[]>('engines'),
       this.supabaseFetch<ControlAddon[]>('addons'),
       this.supabaseFetch<any[]>('settings', { limit: 1 }),
+      this.supabaseFetch<any[]>('organization_entitlements', { limit: 1 }),
     ]);
 
     const config = settings?.[0] || {};
@@ -360,7 +362,56 @@ class ApiService {
       engines: engines || [],
       addons: addons || [],
       intelligenceMode: config.intelligence_mode || 'Pro',
+      entitlements: entitlements?.[0] || null,
     };
+  }
+
+  async getControlsData() {
+    const data = await this.getSettingsData();
+    return {
+      toneOfVoice: data.toneOfVoice,
+      languages: data.languages,
+      formalityLevel: data.formalityLevel,
+      brandKeywords: data.brandKeywords,
+      engines: data.engines,
+      addons: data.addons,
+      intelligenceMode: data.intelligenceMode
+    };
+  }
+
+  async getCreditTransactions() {
+    return this.supabaseFetch<CreditTransaction[]>('credits_transactions', {
+      order: { column: 'created_at', ascending: false },
+      limit: 50
+    });
+  }
+
+  async updateAutoTopup(enabled: boolean, threshold: number, amount: number) {
+    if (!this.organizationId) throw new Error('Organization ID not set');
+
+    const { error } = await supabase
+      .from('organization_entitlements')
+      .update({
+        auto_topup_enabled: enabled,
+        auto_topup_threshold: threshold,
+        auto_topup_amount: amount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('organization_id', this.organizationId);
+
+    if (error) throw error;
+    return { success: true };
+  }
+
+  async getTeamMembers() {
+    if (!this.organizationId) return [];
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('*, profiles(*)')
+      .eq('organization_id', this.organizationId);
+
+    if (error) throw error;
+    return data;
   }
 
   async updateAddonStatus(id: string, enabled: boolean) {
@@ -382,7 +433,6 @@ class ApiService {
   }
 
   async updateIntelligenceMode(mode: string) {
-    // Assuming settings table has organization_id column or we update the single row
     const url = `${SUPABASE_URL}/rest/v1/settings?organization_id=eq.${this.organizationId}`;
     const response = await fetch(url, {
       method: 'PATCH',
@@ -959,26 +1009,6 @@ class ApiService {
     return response.json();
   }
 
-  async getTeamMembers() {
-    // Fetch members joined with profiles
-    const { data, error } = await supabase
-      .from('organization_members')
-      .select(`
-        id,
-        user_id,
-        role,
-        created_at,
-        profiles(
-          full_name,
-          email,
-          phone
-        )
-      `)
-      .eq('organization_id', this.organizationId);
-
-    if (error) throw error;
-    return data;
-  }
 
   async createSubAccount(email: string, password: string, fullName: string, role: string = 'viewer') {
     // Use Edge Function for secure user creation
@@ -1014,27 +1044,6 @@ class ApiService {
     return result;
   }
 
-  async updateAutoTopup(enabled: boolean, threshold: number, amount: number) {
-    const url = `${SUPABASE_URL}/rest/v1/organization_entitlements?organization_id=eq.${this.organizationId}`;
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        auto_topup_enabled: enabled,
-        auto_topup_threshold: threshold,
-        auto_topup_amount: amount
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update auto top-up: ${response.status}`);
-    }
-    return response.json();
-  }
 
   // --- Message Log ---
 
@@ -1128,10 +1137,6 @@ class ApiService {
 
   // --- Settings ---
 
-  async getSettingsData() {
-    const settings = await this.supabaseFetch<any[]>('settings', { limit: 1 });
-    return settings?.[0] || {};
-  }
 
   // --- Sync Stubs ---
 

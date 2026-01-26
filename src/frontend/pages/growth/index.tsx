@@ -122,7 +122,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           title="Value Created"
           subtitle="Efficiency and risk reduction that compounds over time."
         >
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {(data?.valueCreated || [
               { label: 'Value Saved', value: '€ 0,00' },
               { label: 'Hours Saved', value: '0h' },
