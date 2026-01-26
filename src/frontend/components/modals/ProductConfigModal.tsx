@@ -16,7 +16,7 @@ export const ProductConfigModal: React.FC<ProductConfigModalProps> = ({
     product,
     onSave,
 }) => {
-    const [template, setTemplate] = useState(product?.template || '');
+    const [template, setTemplate] = useState(product?.template || product?.defaultTemplate || '');
     const [hoursBefore, setHoursBefore] = useState(product?.hoursBefore || '24');
     const [frequency, setFrequency] = useState(product?.frequency || '1');
     const [checkInTime, setCheckInTime] = useState('15:00');
