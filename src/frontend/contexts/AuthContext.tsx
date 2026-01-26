@@ -217,10 +217,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const canAccessControls = userRole ? ['owner', 'admin', 'manager'].includes(userRole) : false;
 
     // Derived blocking states
-    // Block if: user is logged in AND (no entitlements OR subscription is not active)
-    const isAppBlocked = !!user && (!entitlements || !entitlements.subscription_active);
-    const isCreditsBlocked = !!user && !!entitlements && entitlements.subscription_active && entitlements.credits_balance <= 0;
-    const isLowCredits = !!user && !!entitlements && entitlements.subscription_active && entitlements.credits_balance > 0 && entitlements.credits_balance < 10000;
+    // Block if: user is logged in AND no valid subscription
+    // Valid subscription = subscription_active is true OR plan_tier exists (e.g., 'VIP', 'PRO', etc.)
+    const hasValidSubscription: boolean = !!entitlements && (
+        entitlements.subscription_active === true ||
+        !!(entitlements.plan_tier && entitlements.plan_tier.trim() !== '')
+    );
+    const isAppBlocked: boolean = !!user && !hasValidSubscription;
+    const isCreditsBlocked: boolean = !!user && hasValidSubscription && (entitlements?.credits_balance ?? 0) <= 0;
+    const isLowCredits: boolean = !!user && hasValidSubscription && (entitlements?.credits_balance ?? 0) > 0 && (entitlements?.credits_balance ?? 0) < 10000;
+
+    // Debug logging for subscription issues
+    if (user && entitlements) {
+        console.log('[AuthContext] Subscription check:', {
+            subscription_active: entitlements.subscription_active,
+            plan_tier: entitlements.plan_tier,
+            hasValidSubscription,
+            isAppBlocked
+        });
+    }
     const canEdit = membership ? ['owner', 'admin', 'manager'].includes(membership.role.toLowerCase()) : false;
 
     return (

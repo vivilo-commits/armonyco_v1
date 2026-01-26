@@ -21,15 +21,47 @@ interface GrowthProps {
 }
 
 export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
-  const { data, loading, error, retry } = usePageData(() => api.getGrowthData());
+  const [period, setPeriod] = React.useState('all');
+  const [customStart, setCustomStart] = React.useState('');
+  const [customEnd, setCustomEnd] = React.useState('');
+
+  const dateRange = React.useMemo(() => {
+    if (period === 'all') return { start: undefined, end: undefined };
+    if (period === 'custom') {
+      return {
+        start: customStart ? new Date(customStart + 'T00:00:00').toISOString() : undefined,
+        end: customEnd ? new Date(customEnd + 'T23:59:59').toISOString() : undefined
+      };
+    }
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    if (period === '7d') start.setDate(end.getDate() - 7);
+    if (period === '30d') start.setDate(end.getDate() - 30);
+
+    return {
+      start: start.toISOString(),
+      end: end.toISOString()
+    };
+  }, [period, customStart, customEnd]);
+
+  const { data, loading, error, retry } = usePageData(() =>
+    api.getGrowthData(dateRange.start, dateRange.end)
+  );
+
+  React.useEffect(() => {
+    retry();
+  }, [period, customStart, customEnd, retry]);
 
   // Calculate real financial metrics from data
   const financialMetrics = React.useMemo(() => {
     if (!data?.kpis) return null;
 
     // Find specific KPIs by label
-    const totalRevenue = data.kpis.find(k => k.label === 'Total Revenue Captured')?.value || '€ 0,00';
-    const upsellRate = data.kpis.find(k => k.label === 'Upsell Acceptance Rate')?.value || '0.0%';
+    const totalRevenue = data.kpis.find(k => k.label === 'Revenue Governed')?.value || '€ 0,00';
+    const upsellRate = data.kpis.find(k => k.label === 'Guest Conversion Efficiency')?.value || '0.0%';
     const orphanDays = data.kpis.find(k => k.label === 'Orphan Days Captured')?.value || '0';
     const lateCheckout = data.kpis.find(k => k.label === 'Late Checkout Revenue')?.value || '€ 0,00';
     const earlyCheckin = data.kpis.find(k => k.label === 'Early Check-in Revenue')?.value || '€ 0,00';
@@ -57,12 +89,50 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
   return (
     <AppPage
       title="Growth"
-      subtitle="Total value captured via governance & operational upsells."
+      subtitle="Total value governed via institutional configuration & operational capture."
       loading={loading}
       error={error}
       onRetry={retry}
       actions={
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          <div className="flex bg-stone-100 p-1 rounded-xl">
+            {[
+              { label: 'All', value: 'all' },
+              { label: '7D', value: '7d' },
+              { label: '30D', value: '30d' },
+              { label: 'Custom', value: 'custom' },
+            ].map((p) => (
+              <button
+                key={p.value}
+                onClick={() => setPeriod(p.value)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${period === p.value
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-400 hover:text-stone-600'
+                  }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {period === 'custom' && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300">
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="bg-stone-100 border-none text-[10px] font-bold text-stone-600 rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-stone-300 outline-none"
+              />
+              <span className="text-stone-300 text-[10px] font-bold">TO</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="bg-stone-100 border-none text-[10px] font-bold text-stone-600 rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-stone-300 outline-none"
+              />
+            </div>
+          )}
+
           <AppButton
             variant="primary"
             icon={<Target size={16} />}
@@ -76,8 +146,8 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
       <div className="space-y-12">
         {/* SECTION 1: VALUE CAPTURED */}
         <AppSection
-          title="Value Captured"
-          subtitle="Revenue governed by the system across upsells, extensions, and opportunity capture."
+          title="Revenue Governed"
+          subtitle="Upsells, extensions and opportunities handled automatically."
         >
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {/* Primary Metric Highlight */}
@@ -85,7 +155,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
               variant="gold"
               kpi={{
                 id: `v-cap-primary`,
-                label: 'Revenue Captured',
+                label: 'Revenue Governed',
                 value: financialMetrics?.totalRevenue || '€ 0,00',
                 subtext: data?.wins?.length ? `${data.wins.length} Wins` : 'Awaiting Verification',
                 trend: 0,
@@ -94,7 +164,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
               }}
             />
             {[
-              { label: 'Upsell Acceptance Rate', value: financialMetrics?.upsellRate || '0.0%', sub: 'Conversion Rate' },
+              { label: 'Guest Conversion Efficiency', value: financialMetrics?.upsellRate || '0.0%', sub: 'Percentage of accepted system-driven offers.' },
               { label: 'Orphan Days Captured', value: financialMetrics?.orphanDays || '0', sub: 'Occupancy Boost' },
               { label: 'Late Check-out Revenue', value: financialMetrics?.lateCheckout || '€ 0,00', sub: 'Extension Value' },
               { label: 'Early Check-in Revenue', value: financialMetrics?.earlyCheckin || '€ 0,00', sub: 'Arrival Value' },
@@ -125,10 +195,10 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {(data?.valueCreated || [
               { label: 'Value Saved', value: '€ 0,00' },
-              { label: 'Hours Saved', value: '0h' },
+              { label: 'Human Load Removed', value: '0h' },
               { label: 'Escalations Resolved', value: '0' },
               { label: 'Escalations Open', value: '0' },
-              { label: 'Automation Rate', value: '0%' },
+              { label: 'Operational Autonomy', value: '0%' },
               { label: 'Resolution Rate', value: '0%' },
             ]).map((item: any, i: number) => (
               <AppKPICard
@@ -148,8 +218,8 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           </div>
         </AppSection>
 
-        {/* SECTION 3: TOP WINS */}
-        <AppSection title="Top Wins" subtitle="Verified outcomes and attributed value.">
+        {/* SECTION 3: VERIFIED OUTCOMES */}
+        <AppSection title="Verified Outcomes" subtitle="Institutional routines and attributed value captured by the system.">
           <div className="min-h-[300px]">
             {filteredWins.length === 0 ? (
               <AppEmptyState
@@ -193,7 +263,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
                             : 'neutral'
                         }
                       >
-                        {win.status}
+                        {win.status === 'Captured' || win.status === 'Verified' ? 'Governed' : win.status}
                       </AppBadge>
                     </AppTableCell>
                   </AppTableRow>

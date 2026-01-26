@@ -56,7 +56,10 @@ class ApiService {
     } = {}
   ): Promise<T | null> {
     try {
-      console.log(`[API] 🔄 Fetching ${table} (Supabase client)...`);
+      console.log(`[API] 🔍 Fetching ${table} with org_id: ${this.organizationId}`);
+      if (!this.organizationId) {
+        console.warn(`[API] ⚠️ No organization_id set! Data fetch for ${table} might be empty or unrestricted.`);
+      }
 
       let query = supabase.from(table).select(options.select || '*');
 
@@ -115,14 +118,24 @@ class ApiService {
       const { data, error } = await query;
 
       if (error) {
-        console.error(`[API] ❌ Supabase error for ${table}: `, error);
+        console.error(`[API] ❌ Supabase error for ${table}:`, error);
+        console.error(`[API] Error details:`, {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         return null;
       }
 
-      console.log(`[API] ✅ ${table}: ${Array.isArray(data) ? data.length : 1} rows`);
+      const resultCount = Array.isArray(data) ? data.length : (data ? 1 : 0);
+      console.log(`[API] ✅ ${table}: ${resultCount} rows retrieved`);
+      if (resultCount === 0) {
+        console.warn(`[API] ⚠️ ${table} returned ZERO results - this may indicate a filtering issue`);
+      }
       return data as T;
     } catch (error) {
-      console.error(`[API] ❌ Exception fetching ${table}: `, error);
+      console.error(`[API] ❌ Exception fetching ${table}:`, error);
       return null;
     }
   }
@@ -261,10 +274,10 @@ class ApiService {
   // --- Growth Data ---
 
   async getGrowthData(startDate?: string, endDate?: string) {
-    // Fetch executions
+    // Fetch executions using started_at for consistency with Dashboard
     const executions = await this.supabaseFetch<Execution[]>('executions', {
-      range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
-      order: { column: 'created_at', ascending: false },
+      range: startDate || endDate ? { column: 'started_at', start: startDate, end: endDate } : undefined,
+      order: { column: 'started_at', ascending: false },
       limit: 1000,
     });
 
@@ -312,7 +325,21 @@ class ApiService {
       ? Math.round((safeExecutions.filter(e => !e.human_escalation_triggered).length / safeExecutions.length) * 100)
       : 0;
 
-    const totalValueSaved = totalHoursSaved * 17;
+    // --- VALUE SAVED CALCULATION (Summation Logic) ---
+    // 1. Human Time Value: Hours saved * Hourly Rate (pro-rated €25/hr)
+    const hourlyRate = 25;
+    const valueFromTime = totalHoursSaved * hourlyRate;
+
+    // 2. Operational Autonomy Value: Fixed savings per autonomous execution (e.g., €0.50/op)
+    // Represents the transactional cost of context switching/micro-management avoided
+    const autonomousExecutionsCount = safeExecutions.filter(e => !e.human_escalation_triggered).length;
+    const valueFromAutonomy = autonomousExecutionsCount * 0.50;
+
+    // 3. Resolution Value: Fixed value per successful resolution (e.g., €5.00/resolution)
+    // Represents the value of preventing a negative review or loss of guest
+    const valueFromResolutions = resolvedEscalations.length * 5.00;
+
+    const totalValueSaved = valueFromTime + valueFromAutonomy + valueFromResolutions;
 
     const valueCreated = [
       { label: 'Value Saved', value: formatCurrency(totalValueSaved) },
@@ -355,13 +382,21 @@ class ApiService {
     const config = settings?.[0] || {};
 
     return {
-      toneOfVoice: config.tone_of_voice || 'Professional',
+      toneOfVoice: config.tone_of_voice || 'Professional & Warm',
       languages: config.languages || ['English', 'Italian'],
       formalityLevel: config.formality_level || 'High',
       brandKeywords: config.brand_keywords || 'Premium, Reliability',
+      intelligenceMode: config.intelligence_mode || 'Pro',
+      // Dynamic Booleans
+      enableShadowMode: !!config.enable_shadow_mode,
+      enableMultiLanguage: config.enable_multi_language !== false,
+      strictGovernance: config.strict_governance !== false,
+      autoUpsell: config.auto_upsell !== false,
+      autoEarlyCheckin: !!config.auto_early_checkin,
+      autoLateCheckout: !!config.auto_late_checkout,
+      selfCorrection: config.self_correction !== false,
       engines: engines || [],
       addons: addons || [],
-      intelligenceMode: config.intelligence_mode || 'Pro',
       entitlements: entitlements?.[0] || null,
     };
   }
@@ -373,9 +408,16 @@ class ApiService {
       languages: data.languages,
       formalityLevel: data.formalityLevel,
       brandKeywords: data.brandKeywords,
+      intelligenceMode: data.intelligenceMode,
+      enableShadowMode: data.enableShadowMode,
+      enableMultiLanguage: data.enableMultiLanguage,
+      strictGovernance: data.strictGovernance,
+      autoUpsell: data.autoUpsell,
+      autoEarlyCheckin: data.autoEarlyCheckin,
+      autoLateCheckout: data.autoLateCheckout,
+      selfCorrection: data.selfCorrection,
       engines: data.engines,
       addons: data.addons,
-      intelligenceMode: data.intelligenceMode
     };
   }
 
@@ -404,91 +446,122 @@ class ApiService {
   }
 
   async getTeamMembers() {
-    if (!this.organizationId) return [];
+    if (!this.organizationId) {
+      console.warn('[API] getTeamMembers: No organizationId');
+      return [];
+    }
+
+    // Query organization_members and join with profiles using explicit FK
     const { data, error } = await supabase
       .from('organization_members')
-      .select('*, profiles(*)')
-      .eq('organization_id', this.organizationId);
+      .select(`
+        id,
+        user_id,
+        role,
+        created_at,
+        profiles:user_id (
+          id,
+          full_name,
+          email,
+          phone
+        )
+      `)
+      .eq('organization_id', this.organizationId)
+      .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[API] getTeamMembers error:', error);
+      throw error;
+    }
+
+    console.log('[API] getTeamMembers found:', data?.length || 0, 'members');
+    return data || [];
+  }
+
+  async updateIntelligenceMode(mode: string) {
+    if (!this.organizationId) {
+      console.error('[API] updateIntelligenceMode: No organizationId set');
+      throw new Error('No organization ID available');
+    }
+
+    console.log('[API] Updating intelligence mode to:', mode, 'for org:', this.organizationId);
+
+    const { data, error } = await supabase
+      .from('settings')
+      .update({
+        intelligence_mode: mode,
+        updated_at: new Date().toISOString()
+      })
+      .eq('organization_id', this.organizationId)
+      .select();
+
+    if (error) {
+      console.error('[API] updateIntelligenceMode failed:', error);
+      throw new Error(`Failed to update intelligence mode: ${error.message}`);
+    }
+
+    console.log('[API] updateIntelligenceMode success:', data);
+    return data;
+  }
+
+  async updateGeneralSettings(settings: Record<string, any>) {
+    if (!this.organizationId) {
+      console.error('[API] updateGeneralSettings: No organizationId');
+      throw new Error('No organization ID available');
+    }
+
+    console.log('[API] updateGeneralSettings (Supabase):', settings);
+
+    const { data, error } = await supabase
+      .from('settings')
+      .update({
+        ...settings,
+        updated_at: new Date().toISOString()
+      })
+      .eq('organization_id', this.organizationId)
+      .select();
+
+    if (error) {
+      console.error('[API] updateGeneralSettings failed:', error);
+      throw new Error(`Failed to update settings: ${error.message}`);
+    }
+
+    console.log('[API] updateGeneralSettings success:', data);
+    return data;
+  }
+
+  async updateEngineStatus(id: string, status: 'Active' | 'Inactive') {
+    if (!this.organizationId) throw new Error('No organization ID available');
+
+    const { data, error } = await supabase
+      .from('engines')
+      .update({ status })
+      .eq('id', id)
+      .eq('organization_id', this.organizationId)
+      .select();
+
+    if (error) {
+      console.error('[API] updateEngineStatus failed:', error);
+      throw new Error(`Failed to update engine status: ${error.message}`);
+    }
     return data;
   }
 
   async updateAddonStatus(id: string, enabled: boolean) {
-    const url = `${SUPABASE_URL}/rest/v1/addons?id=eq.${id}&organization_id=eq.${this.organizationId}`;
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ enabled })
-    });
+    if (!this.organizationId) throw new Error('No organization ID available');
 
-    if (!response.ok) {
-      throw new Error(`Failed to update addon: ${response.status}`);
+    const { data, error } = await supabase
+      .from('addons')
+      .update({ enabled })
+      .eq('id', id)
+      .eq('organization_id', this.organizationId)
+      .select();
+
+    if (error) {
+      console.error('[API] updateAddonStatus failed:', error);
+      throw new Error(`Failed to update addon status: ${error.message}`);
     }
-    return response.json();
-  }
-
-  async updateIntelligenceMode(mode: string) {
-    const url = `${SUPABASE_URL}/rest/v1/settings?organization_id=eq.${this.organizationId}`;
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ intelligence_mode: mode })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update intelligence mode: ${response.status}`);
-    }
-    return response.json();
-  }
-
-  async updateGeneralSettings(settings: {
-    tone_of_voice: string;
-    languages: string[];
-    formality_level: string;
-    brand_keywords: string;
-  }) {
-    const url = `${SUPABASE_URL}/rest/v1/settings?organization_id=eq.${this.organizationId}`;
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(settings)
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update general settings: ${response.status}`);
-    }
-    return response.json();
-  }
-
-  async updateEngineStatus(id: string, status: 'Active' | 'Paused') {
-    const url = `${SUPABASE_URL}/rest/v1/engines?id=eq.${id}&organization_id=eq.${this.organizationId}`;
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ status })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to update engine status: ${response.status}`);
-    }
-    return response.json();
+    return data;
   }
 
   /**

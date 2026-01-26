@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { PropertiesTable } from './PropertiesTable';
+
+
 import {
   User,
   Building2,
@@ -39,7 +42,7 @@ import { usePageData } from '@/frontend/hooks/usePageData';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '@/database/supabase';
 
-type SettingsTab = 'IDENTITY' | 'ORGANIZATION' | 'SYSTEM_ACTIVATION' | 'SUBSCRIPTION';
+type SettingsTab = 'IDENTITY' | 'ORGANIZATION' | 'PROPERTIES' | 'SYSTEM_ACTIVATION' | 'SUBSCRIPTION';
 
 interface TeamMember {
   id: string;
@@ -59,7 +62,7 @@ export const Settings: React.FC = () => {
   const { profile, organization, entitlements, membership, canEdit, canEditSettings, refreshProfile } = useAuth();
 
   // Tabs that managers cannot edit
-  const readOnlyTabs: SettingsTab[] = canEditSettings ? [] : ['IDENTITY', 'ORGANIZATION', 'SYSTEM_ACTIVATION', 'SUBSCRIPTION'];
+  const readOnlyTabs: SettingsTab[] = canEditSettings ? [] : ['IDENTITY', 'ORGANIZATION', 'PROPERTIES', 'SYSTEM_ACTIVATION', 'SUBSCRIPTION'];
 
   // Modal states
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
@@ -73,7 +76,7 @@ export const Settings: React.FC = () => {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [language, setLanguage] = useState('en');
-  const [aiTone, setAiTone] = useState('professional');
+  // Removed AI Tone state
 
   // Editable fields - Organization
   const [companyName, setCompanyName] = useState('');
@@ -117,7 +120,6 @@ export const Settings: React.FC = () => {
       setEmail(profile.email || '');
       setPhone(profile.phone || '');
       setLanguage(profile.language || 'en');
-      setAiTone(profile.ai_tone || 'professional');
     }
     if (organization) {
       setCompanyName(organization.name || '');
@@ -130,13 +132,13 @@ export const Settings: React.FC = () => {
   }, [profile, organization]);
 
   useEffect(() => {
-    if (activeTab === 'ORGANIZATION') {
+    if (activeTab === 'ORGANIZATION' && organization?.id) {
       fetchTeamMembers();
     }
-    if (activeTab === 'SUBSCRIPTION') {
+    if (activeTab === 'SUBSCRIPTION' && organization?.id) {
       fetchTransactions();
     }
-  }, [activeTab]);
+  }, [activeTab, organization?.id]);
 
   const fetchTeamMembers = async () => {
     setLoadingTeam(true);
@@ -229,7 +231,6 @@ export const Settings: React.FC = () => {
           full_name: fullName,
           phone,
           language,
-          ai_tone: aiTone,
         })
         .eq('id', profile.id);
 
@@ -292,30 +293,31 @@ export const Settings: React.FC = () => {
   const tabs = [
     { id: 'IDENTITY' as const, label: 'Identity', icon: <User size={16} /> },
     { id: 'ORGANIZATION' as const, label: 'Organization', icon: <Building2 size={16} /> },
+    { id: 'PROPERTIES' as const, label: 'Properties', icon: <Building2 size={16} /> }, // Using Building2 as temporary icon
     { id: 'SYSTEM_ACTIVATION' as const, label: 'System Activation', icon: <Zap size={16} /> },
     { id: 'SUBSCRIPTION' as const, label: 'Subscription', icon: <CreditCard size={16} /> },
   ];
 
   return (
     <AppPage
-      title="Settings"
-      subtitle="Manage your profile, organization, and system configuration."
+      title="System Identity"
+      subtitle="Define your institutional persona and system activation parameters."
       loading={loading}
       error={error}
       onRetry={retry}
     >
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* SIDEBAR TABS - Light Theme */}
-        <div className="w-full lg:w-64 space-y-2">
+      <div className="space-y-8">
+        {/* EMBEDDED HORIZONTAL MENU */}
+        <div className="flex bg-stone-100/50 p-1.5 rounded-2xl w-fit">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`
-                w-full flex items-center gap-3 px-5 py-4 rounded-2xl text-sm font-bold transition-all
+                flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all
                 ${activeTab === tab.id
-                  ? 'bg-stone-900 text-white shadow-premium'
-                  : 'bg-white text-stone-600 hover:bg-stone-100 hover:text-stone-900 border border-stone-200'
+                  ? 'bg-white text-stone-900 shadow-sm'
+                  : 'text-stone-500 hover:text-stone-700'
                 }
               `}
             >
@@ -326,11 +328,11 @@ export const Settings: React.FC = () => {
         </div>
 
         {/* CONTENT AREA - Light Theme */}
-        <div className="flex-1">
+        <div className="w-full">
           <AppCard variant="light" className="p-8">
             {/* IDENTITY TAB */}
             {activeTab === 'IDENTITY' && (
-              <AppSection title="Personal Identity" subtitle="Your profile information">
+              <AppSection title="Identity" subtitle="Your institutional profile information">
                 <div className="space-y-6 mt-8">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
@@ -384,26 +386,7 @@ export const Settings: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                      AI Tone
-                    </label>
-                    <div className="flex gap-2">
-                      {['professional', 'friendly', 'formal', 'casual'].map((tone) => (
-                        <button
-                          key={tone}
-                          disabled={readOnlyTabs.includes('IDENTITY')}
-                          onClick={() => setAiTone(tone)}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all ${aiTone === tone
-                            ? 'bg-stone-900 text-white'
-                            : 'bg-stone-100 text-stone-600 hover:bg-stone-200 border border-stone-200'
-                            } ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        >
-                          {tone}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  {/* AI Tone removed */}
 
                   {!readOnlyTabs.includes('IDENTITY') && (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 pt-6 mt-4 border-t border-stone-100">
@@ -639,6 +622,13 @@ export const Settings: React.FC = () => {
               </AppSection>
             )}
 
+            {/* PROPERTIES TAB */}
+            {activeTab === 'PROPERTIES' && (
+              <AppSection title="Properties Management" subtitle="Manage your portfolio of hotels and units">
+                <PropertiesTable />
+              </AppSection>
+            )}
+
             {/* SYSTEM ACTIVATION TAB */}
             {activeTab === 'SYSTEM_ACTIVATION' && (
               <AppSection
@@ -647,11 +637,11 @@ export const Settings: React.FC = () => {
               >
                 <div className="space-y-6 mt-8">
                   {/* WhatsApp Connection */}
-                  <div className="p-6 bg-stone-50 rounded-2xl border border-stone-200">
+                  <div className="p-6 bg-white rounded-2xl border border-stone-200 hover:border-gold-start/30 transition-all shadow-sm hover:shadow-gold-glow">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
-                          <Phone size={24} className="text-green-400" />
+                        <div className="w-12 h-12 bg-gold-start/10 rounded-xl flex items-center justify-center">
+                          <Phone size={24} className="text-gold-start" />
                         </div>
                         <div>
                           <h3 className="font-bold text-stone-900">WhatsApp Business API</h3>
@@ -671,11 +661,11 @@ export const Settings: React.FC = () => {
                         </AppButton>
                       </div>
                     </div>
-                    <div className="mt-4 p-4 bg-white rounded-xl">
+                    <div className="mt-4 p-4 bg-stone-50 rounded-xl border border-stone-100">
                       <p className="text-xs text-stone-500 mb-2 font-bold uppercase tracking-widest">
                         Required for activation:
                       </p>
-                      <ul className="text-sm text-stone-600 space-y-1">
+                      <ul className="text-xs font-medium text-stone-500 space-y-1">
                         <li>• WhatsApp Business Account ID (WABA ID)</li>
                         <li>• Phone Number ID</li>
                         <li>• Permanent Access Token</li>
@@ -685,11 +675,11 @@ export const Settings: React.FC = () => {
                   </div>
 
                   {/* PMS Connection */}
-                  <div className="p-6 bg-stone-50 rounded-2xl border border-stone-200">
+                  <div className="p-6 bg-white rounded-2xl border border-stone-200 hover:border-gold-start/30 transition-all shadow-sm hover:shadow-gold-glow">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
-                          <Building2 size={24} className="text-blue-400" />
+                        <div className="w-12 h-12 bg-gold-start/10 rounded-xl flex items-center justify-center">
+                          <Building2 size={24} className="text-gold-start" />
                         </div>
                         <div>
                           <h3 className="font-bold text-stone-900">PMS Integration</h3>
@@ -709,15 +699,15 @@ export const Settings: React.FC = () => {
                         </AppButton>
                       </div>
                     </div>
-                    <div className="mt-4 p-4 bg-white rounded-xl">
+                    <div className="mt-4 p-4 bg-stone-50 rounded-xl border border-stone-100">
                       <p className="text-xs text-stone-500 mb-2 font-bold uppercase tracking-widest">
                         Supported PMS:
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        {['Cloudbeds', 'Mews', 'Opera', 'Protel', 'Apaleo', 'Other'].map((pms) => (
+                        {['Krossbooking', 'Guesty', 'Octored'].map((pms) => (
                           <span
                             key={pms}
-                            className="px-3 py-1 bg-stone-100 rounded-lg text-xs text-stone-600"
+                            className="px-3 py-1 bg-white border border-stone-200 rounded-lg text-xs text-stone-500 font-bold"
                           >
                             {pms}
                           </span>
@@ -727,11 +717,11 @@ export const Settings: React.FC = () => {
                   </div>
 
                   {/* Knowledge Base */}
-                  <div className="p-6 bg-stone-50 rounded-2xl border border-stone-200">
+                  <div className="p-6 bg-white rounded-2xl border border-stone-200 hover:border-gold-start/30 transition-all shadow-sm hover:shadow-gold-glow">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-purple-500/20 rounded-xl flex items-center justify-center">
-                          <FileText size={24} className="text-purple-400" />
+                        <div className="w-12 h-12 bg-gold-start/10 rounded-xl flex items-center justify-center">
+                          <FileText size={24} className="text-gold-start" />
                         </div>
                         <div>
                           <h3 className="font-bold text-stone-900">Knowledge Base</h3>
@@ -750,12 +740,12 @@ export const Settings: React.FC = () => {
                         </AppButton>
                       </div>
                     </div>
-                    <div className="mt-4 p-4 bg-white rounded-xl">
+                    <div className="mt-4 p-4 bg-stone-50 rounded-xl border border-stone-100">
                       <p className="text-xs text-stone-500 mb-2 font-bold uppercase tracking-widest">
                         Accepted formats:
                       </p>
-                      <p className="text-sm text-stone-600">
-                        PDF, DOCX, TXT, MD • Max 10MB per file
+                      <p className="text-xs font-medium text-stone-500">
+                        PDF, Text, URL, Database • Max 10MB per file
                       </p>
                     </div>
                   </div>
