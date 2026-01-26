@@ -20,3 +20,8 @@
 ## 🛠️ Resolved Issues
 - **[2026-01-26] Blank Message Log**: Resolved by adding RLS policy and verifying `api.ts` fetch logic.
 - **[2026-01-26] Giant Controls Cards**: Reduced padding and radius in `Controls/index.tsx` to match institutional standards.
+
+### Institutional Identity (The Governor)
+- **Terminology**: Use authoritative terms. "AI Resolution" → "Autonomous Resolution", "Revenue Captured" → "Revenue Governed".
+- **Visuals**: No generic colors (green/blue/purple) in Settings/Admin areas. Use strict **Gold & Stone** (`text-gold-start` / `bg-gold-start/10`) to enforce the premium institutional feel.
+- **Value Logic**: "Value Saved" is never just hours. It is an aggregation: `(Hours * Rate) + (Autonomous Ops * Cost) + (Resolutions * Value)`.
