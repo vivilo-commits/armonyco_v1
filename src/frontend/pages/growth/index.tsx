@@ -136,11 +136,11 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           <AppButton
             variant="primary"
             icon={<Target size={16} />}
-            onClick={() => alert('Starting Goal Capture analysis...')}
+            onClick={() => retry()}
           >
-            Capture Goal
+            Refresh Data
           </AppButton>
-        </div>
+        </div >
       }
     >
       <div className="space-y-12">
@@ -273,7 +273,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           </div>
         </AppSection>
       </div>
-    </AppPage>
+    </AppPage >
   );
 };
 
