@@ -6,9 +6,7 @@ import {
     Scale,
     Search,
     Plus,
-    MessageSquare,
     CheckCircle2,
-    Zap,
     Cpu,
     Filter,
     Sliders,
@@ -65,11 +63,6 @@ export const Controls: React.FC<ControlsProps> = () => {
     const [brandKeywords, setBrandKeywords] = React.useState('');
 
     const [enableShadowMode, setEnableShadowMode] = React.useState(false);
-    const [autoUpsell, setAutoUpsell] = React.useState(false);
-    const [autoEarlyCheckin, setAutoEarlyCheckin] = React.useState(false);
-    const [autoLateCheckout, setAutoLateCheckout] = React.useState(false);
-    const [selfCorrection, setSelfCorrection] = React.useState(false);
-
     const [saving, setSaving] = React.useState(false);
 
     const [pendingAction, setPendingAction] = React.useState<{
@@ -98,10 +91,6 @@ export const Controls: React.FC<ControlsProps> = () => {
             setFormalityLevel(data.formalityLevel || 'High');
             setBrandKeywords(data.brandKeywords || '');
             setEnableShadowMode(data.enableShadowMode);
-            setAutoUpsell(data.autoUpsell);
-            setAutoEarlyCheckin(data.autoEarlyCheckin);
-            setAutoLateCheckout(data.autoLateCheckout);
-            setSelfCorrection(data.selfCorrection);
         }
     }, [data]);
 
@@ -169,12 +158,7 @@ export const Controls: React.FC<ControlsProps> = () => {
         { label: 'Max', value: 'Max', desc: 'Maximum cognitive depth for institutional scale.' }
     ];
 
-    const CAPABILITIES = [
-        { label: 'Autonomous Upsell', id: 'autoUpsell', sub: 'Maximize transactional revenue', value: autoUpsell },
-        { label: 'Self-Correction', id: 'selfCorrection', sub: 'Real-time failure recovery', value: selfCorrection },
-        { label: 'Early Check-in', id: 'autoEarlyCheckin', sub: 'Capture arriving value', value: autoEarlyCheckin },
-        { label: 'Late Check-out', id: 'autoLateCheckout', sub: 'Capture departing value', value: autoLateCheckout },
-    ];
+
 
     return (
         <>
@@ -380,66 +364,7 @@ export const Controls: React.FC<ControlsProps> = () => {
                                 </div>
                             </div>
 
-                            <div className="h-px w-full bg-gradient-to-r from-transparent via-stone-100 to-transparent" />
 
-                            {/* SECTION C: COGNITIVE CAPABILITIES */}
-                            <div>
-                                <div className="flex items-center gap-3 mb-8">
-                                    <div className="w-10 h-10 rounded-xl bg-gold-start/10 flex items-center justify-center">
-                                        <Zap size={20} className="text-gold-start" />
-                                    </div>
-                                    <div>
-                                        <h3 className="text-xl font-bold text-stone-900 tracking-tight">Cognitive Capabilities (AIM)</h3>
-                                        <p className="text-xs text-stone-500 font-medium tracking-wide">Specific autonomous routines allowed for system execution.</p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                    {CAPABILITIES.map((cap) => {
-                                        const isActive = cap.value;
-                                        return (
-                                            <button
-                                                key={cap.id}
-                                                onClick={() => {
-                                                    setPendingAction({
-                                                        type: 'CAPABILITY',
-                                                        target: cap.id,
-                                                        label: cap.label,
-                                                        newValue: !cap.value
-                                                    });
-                                                }}
-                                                disabled={!canEdit}
-                                                className={`
-                                                    relative p-5 rounded-2xl border text-left transition-all duration-500 group overflow-hidden
-                                                    ${isActive
-                                                        ? 'bg-stone-900 border-stone-900 shadow-premium'
-                                                        : 'bg-stone-50/50 border-stone-100 hover:bg-white hover:border-gold-start/20 hover:shadow-xl'}
-                                                `}
-                                            >
-                                                <div className="flex items-start justify-between mb-4">
-                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isActive ? 'bg-white/10 text-gold-start rotate-12 shadow-gold-glow' : 'bg-white text-stone-400'}`}>
-                                                        <Zap size={20} strokeWidth={1.5} />
-                                                    </div>
-                                                    <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-green-500 shadow-pulse-green' : 'bg-stone-200'}`} />
-                                                </div>
-
-                                                <div className={`text-sm font-black uppercase tracking-[0.1em] mb-2 ${isActive ? 'text-white' : 'text-stone-800'}`}>
-                                                    {cap.label}
-                                                </div>
-                                                <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">
-                                                    {cap.sub}
-                                                </p>
-
-                                                {isActive && (
-                                                    <div className="absolute -bottom-2 -right-2 opacity-5 scale-150 rotate-12">
-                                                        <Shield size={120} />
-                                                    </div>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
                         </div>
                     </AppCard>
 
@@ -522,7 +447,6 @@ export const Controls: React.FC<ControlsProps> = () => {
                                         'Productivity',
                                         'Human Time',
                                         'Runtime',
-                                        'Status',
                                         'Actions'
                                     ]}
                                 >
@@ -557,12 +481,7 @@ export const Controls: React.FC<ControlsProps> = () => {
                                             <AppTableCell className="text-[10px] font-mono text-stone-900 font-black">
                                                 {p.runtime}
                                             </AppTableCell>
-                                            <AppTableCell>
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-2.5 h-2.5 rounded-full ${p.status === 'Active' ? 'bg-green-500 shadow-pulse-green' : 'bg-stone-200'}`} />
-                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${p.status === 'Active' ? 'text-stone-900' : 'text-stone-400'}`}>{p.status}</span>
-                                                </div>
-                                            </AppTableCell>
+
                                             <AppTableCell>
                                                 <div className="flex items-center gap-3">
                                                     <AppButton
@@ -722,12 +641,12 @@ export const Controls: React.FC<ControlsProps> = () => {
                                         }
                                     } else {
                                         // Update local state for capabilities (and then commit via Commit Changes)
-                                        switch (pendingAction.target) {
-                                            case 'autoUpsell': setAutoUpsell(pendingAction.newValue); break;
-                                            case 'selfCorrection': setSelfCorrection(pendingAction.newValue); break;
-                                            case 'autoEarlyCheckin': setAutoEarlyCheckin(pendingAction.newValue); break;
-                                            case 'autoLateCheckout': setAutoLateCheckout(pendingAction.newValue); break;
-                                        }
+                                        // switch (pendingAction.target) {
+                                        //     case 'autoUpsell': setAutoUpsell(pendingAction.newValue); break;
+                                        //     case 'selfCorrection': setSelfCorrection(pendingAction.newValue); break;
+                                        //     case 'autoEarlyCheckin': setAutoEarlyCheckin(pendingAction.newValue); break;
+                                        //     case 'autoLateCheckout': setAutoLateCheckout(pendingAction.newValue); break;
+                                        // }
                                     }
                                     setPendingAction(null);
                                 }}
