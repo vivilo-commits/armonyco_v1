@@ -25,3 +25,8 @@
 - **Terminology**: Use authoritative terms. "AI Resolution" → "Autonomous Resolution", "Revenue Captured" → "Revenue Governed".
 - **Visuals**: No generic colors (green/blue/purple) in Settings/Admin areas. Use strict **Gold & Stone** (`text-gold-start` / `bg-gold-start/10`) to enforce the premium institutional feel.
 - **Value Logic**: "Value Saved" is never just hours. It is an aggregation: `(Hours * Rate) + (Autonomous Ops * Cost) + (Resolutions * Value)`.
+
+### Deployment & Operations
+- **Vercel Mapping**: Local repo `Armonyco_v1` (remote `vivilo-commits/armonyco_v1`) maps to Vercel project `armonyco-v1-bsvv`, NOT `armonyco-v1`.
+- **Subscription Logic**: Validation checks both `subscription_active` (boolean) AND `plan_tier` (string presence). `entitlements` being null strictly blocks access.
+
