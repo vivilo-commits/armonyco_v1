@@ -58,10 +58,13 @@ interface AuthContextType {
     signOut: () => Promise<void>;
     refreshProfile: () => Promise<void>;
     // Role-based permissions
-    userRole: 'owner' | 'admin' | 'manager' | 'viewer' | null;
+    userRole: 'owner' | 'manager' | 'viewer' | null;
     canAccessSettings: boolean;
     canEditSettings: boolean;
     canAccessControls: boolean;
+    canManageTeam: boolean;
+    canResolveEscalations: boolean;
+    canEditGeneralSettings: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -76,21 +79,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [sessionExpired] = useState(false);
 
     useEffect(() => {
-        // Get initial session
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session?.user) {
-                setUser({ id: session.user.id, email: session.user.email! });
-                fetchUserData(session.user.id);
-            } else {
-                setLoading(false);
+        let mounted = true;
+        let initializing = true;
+
+        const initAuth = async () => {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (!mounted) return;
+
+                if (session?.user) {
+                    setUser({ id: session.user.id, email: session.user.email! });
+                    await fetchUserData(session.user.id, true);
+                } else {
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error('[AuthContext] Error in initAuth:', error);
+                if (mounted) setLoading(false);
+            } finally {
+                initializing = false;
             }
-        });
+        };
 
         // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('[AuthContext] Auth session change:', event, session?.user?.id);
+
+            if (!mounted) return;
+
+            // Avoid double fetch on initial session if initAuth is already handling it
+            if (initializing && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
+                return;
+            }
+
             if (session?.user) {
                 setUser({ id: session.user.id, email: session.user.email! });
-                fetchUserData(session.user.id);
+                await fetchUserData(session.user.id);
             } else {
                 setUser(null);
                 setProfile(null);
@@ -102,84 +126,97 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
         });
 
+        initAuth();
+
         return () => {
+            mounted = false;
             subscription.unsubscribe();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    async function fetchUserData(userId: string) {
+    async function fetchUserData(userId: string, isInitial: boolean = false) {
+        if (!userId) return;
+
+        console.log('[AuthContext] 🔄 Fetching data for user:', userId, isInitial ? '(Initial)' : '');
+
         try {
-            // Fetch profile
-            const { data: profileData } = await supabase
+            // 1. Fetch profile
+            const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', userId)
                 .single();
 
-            if (profileData) {
-                setProfile(profileData);
+            if (profileError) {
+                console.error('[AuthContext] Profile fetch error:', profileError);
+                // Return early if we can't get the profile as it's the base of everything
+                // throw profileError; // Optional: throw to handle in catch
             }
 
-            // Fetch membership
-            const { data: memberships } = await supabase
+            // 2. Fetch membership
+            const { data: memberships, error: membershipError } = await supabase
                 .from('organization_members')
                 .select('*')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(1);
 
-            if (memberships && memberships.length > 0) {
-                const membershipData = memberships[0];
-                setMembership(membershipData);
+            if (membershipError) console.error('[AuthContext] Membership fetch error:', membershipError);
 
-                // Fetch organization
-                const { data: orgData } = await supabase
+            let membershipData = null;
+            let orgData = null;
+            let entData = null;
+
+            if (memberships && memberships.length > 0) {
+                membershipData = memberships[0];
+
+                // 3. Fetch organization
+                const { data: fetchedOrgData, error: orgError } = await supabase
                     .from('organizations')
                     .select('*')
                     .eq('id', membershipData.organization_id)
                     .single();
 
+                if (orgError) console.error('[AuthContext] Organization fetch error:', orgError);
+                orgData = fetchedOrgData;
+
                 if (orgData) {
-                    setOrganization(orgData);
+                    // Update API singleton IMMEDIATELY before state updates
+                    // This prevents children from fetching with null orgId
                     api.setOrganizationId(orgData.id);
-                }
 
+                    // 4. Fetch entitlements
+                    const { data: fetchedEntData, error: entError } = await supabase
+                        .from('organization_entitlements')
+                        .select('*')
+                        .eq('organization_id', orgData.id)
+                        .single();
 
-                // Fetch entitlements
-                console.log('[AuthContext] Fetching entitlements for organization:', membershipData.organization_id);
-                const { data: entData, error: entError } = await supabase
-                    .from('organization_entitlements')
-                    .select('*')
-                    .eq('organization_id', membershipData.organization_id)
-                    .single();
-
-                console.log('[AuthContext] Entitlements fetch result:', { entData, entError });
-
-                if (entError) {
-                    console.error('[AuthContext] Failed to fetch entitlements:', entError);
-                }
-
-                if (entData) {
-                    console.log('[AuthContext] Setting entitlements:', {
-                        subscription_active: entData.subscription_active,
-                        plan_tier: entData.plan_tier,
-                        credits: entData.credits_balance
-                    });
-                    setEntitlements({
-                        subscription_active: entData.subscription_active || false,
-                        subscription_status: entData.subscription_status || null,
-                        credits_balance: entData.credits_balance || 0,
-                        plan_tier: entData.plan_tier || null,
-                        auto_topup_enabled: !!entData.auto_topup_enabled,
-                        auto_topup_threshold: entData.auto_topup_threshold || 10000,
-                        auto_topup_amount: entData.auto_topup_amount || 10000,
-                    });
-                } else {
-                    console.warn('[AuthContext] No entitlements data found for organization:', membershipData.organization_id);
+                    if (entError) console.error('[AuthContext] Entitlements fetch error:', entError);
+                    entData = fetchedEntData;
                 }
             }
+
+            // Batch all state updates
+            if (profileData) setProfile(profileData);
+            if (membershipData) setMembership(membershipData);
+            if (orgData) setOrganization(orgData);
+
+            if (entData) {
+                setEntitlements({
+                    subscription_active: entData.subscription_active || false,
+                    subscription_status: entData.subscription_status || null,
+                    credits_balance: entData.credits_balance || 0,
+                    plan_tier: entData.plan_tier || null,
+                    auto_topup_enabled: !!entData.auto_topup_enabled,
+                    auto_topup_threshold: entData.auto_topup_threshold || 10000,
+                    auto_topup_amount: entData.auto_topup_amount || 10000,
+                });
+            }
+
         } catch (error) {
-            console.error('[AuthContext] Error fetching user data:', error);
+            console.error('[AuthContext] Critical core error fetching data:', error);
         } finally {
             setLoading(false);
         }
@@ -206,15 +243,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const organizationId = membership?.organization_id || null;
 
-    // Role-based permissions
-    const userRole = membership?.role.toLowerCase() as 'owner' | 'admin' | 'manager' | 'viewer' | null || null;
+    // Role-based permissions: Owner, Manager, Viewer (Admin removed)
+    const userRole = membership?.role.toLowerCase() as 'owner' | 'manager' | 'viewer' | null || null;
 
-    // Admin/Owner: full access
-    // Manager: can see settings but limited edit, can see/edit controls
-    // Viewer: no settings/controls menu
-    const canAccessSettings = userRole ? ['owner', 'admin', 'manager'].includes(userRole) : false;
-    const canEditSettings = userRole ? ['owner', 'admin'].includes(userRole) : false;
-    const canAccessControls = userRole ? ['owner', 'admin', 'manager'].includes(userRole) : false;
+    // 1. Navigation Visibility
+    // Owner & Manager can see everything. Viewer cannot see Settings or Controls.
+    const canAccessSettings = userRole ? ['owner', 'manager'].includes(userRole) : false;
+    const canAccessControls = userRole ? ['owner', 'manager'].includes(userRole) : false;
+
+    // 2. Action Permissions
+    // Owner: Can do everything.
+    // Manager: Can see everything, but only EDIT Escalations.
+    // Viewer: Read-only everywhere.
+
+    // Can edit general hotel settings/billing (Owner only)
+    const canEditSettings = userRole === 'owner';
+    const canEditGeneralSettings = userRole === 'owner';
+
+    // Can manage team members (Owner only)
+    const canManageTeam = userRole === 'owner';
+
+    // Can resolve/edit escalations (Owner & Manager)
+    const canResolveEscalations = userRole ? ['owner', 'manager'].includes(userRole) : false;
+
+    // Global edit flag (kept for components that use it as a general guard)
+    // Managers can edit "some" things (escalations), so they have canEdit = true,
+    // but specific actions are gated by more granular flags above.
+    const canEdit = userRole ? ['owner', 'manager'].includes(userRole) : false;
 
     // Derived blocking states
     // Block if: user is logged in AND no valid subscription
@@ -230,13 +285,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Debug logging for subscription issues
     if (user && entitlements) {
         console.log('[AuthContext] Subscription check:', {
+            role: userRole,
             subscription_active: entitlements.subscription_active,
             plan_tier: entitlements.plan_tier,
             hasValidSubscription,
             isAppBlocked
         });
     }
-    const canEdit = membership ? ['owner', 'admin', 'manager'].includes(membership.role.toLowerCase()) : false;
 
     return (
         <AuthContext.Provider
@@ -259,6 +314,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 canAccessSettings,
                 canEditSettings,
                 canAccessControls,
+                // New granular permissions
+                canManageTeam,
+                canResolveEscalations,
+                canEditGeneralSettings,
             }}
         >
             {children}

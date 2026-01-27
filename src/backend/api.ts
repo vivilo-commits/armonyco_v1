@@ -446,6 +446,8 @@ class ApiService {
   }
 
   async getTeamMembers() {
+    console.log('[API] 👥 getTeamMembers called, organizationId:', this.organizationId);
+
     if (!this.organizationId) {
       console.warn('[API] getTeamMembers: No organizationId');
       return [];
@@ -459,7 +461,7 @@ class ApiService {
         user_id,
         role,
         created_at,
-        profiles:user_id (
+        profiles!user_id (
           id,
           full_name,
           email,
@@ -470,11 +472,12 @@ class ApiService {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('[API] getTeamMembers error:', error);
+      console.error('[API] ❌ getTeamMembers error:', error);
       throw error;
     }
 
-    console.log('[API] getTeamMembers found:', data?.length || 0, 'members');
+    console.log('[API] ✅ getTeamMembers found:', data?.length || 0, 'members');
+    console.log('[API] 👥 Team members data:', JSON.stringify(data, null, 2));
     return data || [];
   }
 
@@ -590,14 +593,14 @@ class ApiService {
   async getEscalationsData(status?: string, startDate?: string, endDate?: string): Promise<Escalation[]> {
     console.log('[API] 📋 getEscalationsData called with status:', status, 'Period:', { startDate, endDate });
 
-    // 1. Fetch from 'escalations' (dedicated table) - PRIMARY SOURCE
+    // 1. Fetch from 'escalations' (dedicated table) - PRIMARY SOURCE for User Status
     const escalationsRes = await this.supabaseFetch<Escalation[]>('escalations', {
       range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
       order: { column: 'created_at', ascending: false }
     });
     console.log('[API] 📋 Escalations table returned:', escalationsRes?.length || 0, 'records');
 
-    // 2. Fetch from 'executions' - SECONDARY SOURCE for detection
+    // 2. Fetch from 'executions' - SOURCE for Metadata/History
     const allExecutions = await this.supabaseFetch<Execution[]>('executions', {
       range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
       order: { column: 'created_at', ascending: false },
@@ -607,27 +610,15 @@ class ApiService {
 
     const isMock = (id?: string) => id?.startsWith('hist-') || id?.startsWith('test-');
 
-    // Detect escalations from executions
-    // STRICT: Only count as escalation if human_escalation_triggered is EXPLICITLY true
-    // This prevents false positives and differentiates from Growth page metrics:
-    // - Growth counts all escalation_status (risk situations)
-    // - Escalations page counts only human interventions (human_escalation_triggered = true)
+    // Detect escalations from executions and extract ALL metadata
     const mappedExecutions: Escalation[] = (allExecutions || [])
       .filter(exec => {
-        // Skip mock/test data
         if (isMock(exec.execution_id) || isMock(exec.workflow_name)) return false;
 
         const workflowData = this.robustParseOutput(exec.workflow_output);
-
-        // Only check if human_escalation_triggered is true
-        // Don't require a meaningful reason - empty reasons should still show up for resolution
         const isExplicitlyTriggered =
           exec.human_escalation_triggered === true ||
           workflowData?.human_escalation_triggered === true;
-
-        if (isExplicitlyTriggered) {
-          console.log('[API] 📋 Found human intervention:', exec.execution_id);
-        }
 
         return isExplicitlyTriggered;
       })
@@ -643,8 +634,6 @@ class ApiService {
 
         const aiOutput = workflowData?.ai_output || workflowData?.message || '';
 
-        // Extract trigger message from multiple possible locations in workflow_output
-        // Priority: explicit trigger_message > last_message > ai response > guest message
         const triggerMessage =
           workflowData?.trigger_message ||
           workflowData?.escalation?.trigger_message ||
@@ -657,7 +646,6 @@ class ApiService {
           exec.human_escalation_reason ||
           '';
 
-        // Extract phone from multiple possible locations
         const safePhone = workflowData?.guest?.phone ||
           workflowData?.phone ||
           workflowData?.channel?.phone ||
@@ -665,14 +653,7 @@ class ApiService {
           '';
         const phoneClean = typeof safePhone === 'string' ? normalizePhone(safePhone) : '';
 
-        // Determine status from multiple sources
-        const resolvedStatus = (
-          exec.escalation_status?.toUpperCase() === 'RESOLVED' ||
-          workflowData?.escalation_status?.toUpperCase() === 'RESOLVED'
-        ) ? 'RESOLVED' : 'OPEN';
-
-        // Extract resolved_by_name from human_escalation_reason if present
-        // Format: "[RESOLVED by NAME] notes" or "[RESOLVED by NAME]"
+        // Determine resolved_by_name from reason logic
         let resolvedByName: string | undefined;
         const reasonText = exec.human_escalation_reason || '';
         const resolvedMatch = reasonText.match(/\[RESOLVED by ([^\]]+)\]/i);
@@ -682,14 +663,14 @@ class ApiService {
 
         return {
           id: exec.execution_id || 'unknown',
-          phone_clean: phoneClean || sessionId || exec.execution_id, // Prefer session_id over execution_id
+          phone_clean: phoneClean || (sessionId && sessionId.length > 5 ? sessionId : `Guest #${exec.execution_id}`),
           execution_id: exec.execution_id,
-          status: resolvedStatus as 'OPEN' | 'RESOLVED' | 'DISMISSED',
+          status: 'OPEN', // Default, will be overridden by escalations table
           priority: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'LOW'),
           classification: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'M1'),
-          reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.escalation?.reason || 'Human interaction requested',
+          reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.test_reason || 'Human intervention required',
           resolved_by_name: resolvedByName,
-          resolved_at: resolvedStatus === 'RESOLVED' ? exec.updated_at : undefined,
+          resolved_at: undefined,
           organization_id: exec.organization_id || this.organizationId || '',
           created_at: exec.created_at || new Date().toISOString(),
           updated_at: exec.updated_at || new Date().toISOString(),
@@ -703,59 +684,59 @@ class ApiService {
             score: workflowData?.risk?.score || 0,
             reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.escalation?.reason,
             resolved_by_name: resolvedByName,
+            history: workflowData?.history || [],
           }
         };
       });
 
-    console.log('[API] 📋 Mapped executions with escalation triggers:', mappedExecutions.length);
-
-    // Build unified map with de-duplication
-    const unifiedMap = new Map<string, Escalation>();
-
-    // 1. Load from escalations table first (PRIMARY - has persistence status)
-    (escalationsRes || []).forEach(e => {
-      const sid = e.phone_clean || e.metadata?.session_id || e.id;
-      unifiedMap.set(sid, e);
+    // Smart Merge Logic
+    // executionsMap indexed by execution_id for quick lookup
+    const executionsMap = new Map<string, Escalation>();
+    mappedExecutions.forEach(e => {
+      if (e.execution_id) executionsMap.set(e.execution_id, e);
     });
 
-    // 2. Merge from executions (only add if not already in escalations table)
-    mappedExecutions.forEach(e => {
-      const sid = (e.phone_clean && e.phone_clean.length > 3)
-        ? e.phone_clean
-        : (e.metadata?.session_id || e.id);
+    const finalEscalationsMap = new Map<string, Escalation>();
 
-      const existing = unifiedMap.get(sid);
-
-      if (!existing) {
-        // New escalation detected from execution
-        unifiedMap.set(sid, e);
-      } else {
-        // Escalation already exists - keep the persisted status, but update metadata if execution is newer
-        const existingDate = new Date(existing.created_at).getTime();
-        const detectedDate = new Date(e.created_at).getTime();
-        if (detectedDate > existingDate) {
-          unifiedMap.set(sid, {
-            ...e,
-            id: existing.id, // Keep original ID for updates
-            status: existing.status, // Keep persisted status
-          });
-        }
+    // 1. Process persisted escalations (Status source)
+    (escalationsRes || []).forEach(e => {
+      const eid = e.execution_id;
+      if (eid && executionsMap.has(eid)) {
+        // MATCH: Enrich persisted escalation with metadata from execution
+        const execData = executionsMap.get(eid)!;
+        finalEscalationsMap.set(eid, {
+          ...execData, // Keep rich metadata/history
+          status: e.status, // Overwrite with user-controlled status
+          reason: e.reason || execData.reason, // Use user reason if present
+          priority: e.priority || execData.priority,
+          id: e.id, // Use the DB ID for updates
+          resolved_by_name: e.resolved_by_name || execData.resolved_by_name,
+          resolved_at: e.resolved_at || (e.status === 'RESOLVED' ? e.updated_at : undefined),
+        });
+      } else if (e.execution_id || e.id) {
+        // Only in escalations table (orphaned or different format)
+        finalEscalationsMap.set(e.execution_id || e.id, e);
       }
     });
 
-    const unified = Array.from(unifiedMap.values());
-    console.log('[API] 📋 Unified escalations before filtering:', unified.length);
+    // 2. Add detected escalations that aren't in the escalations table yet
+    mappedExecutions.forEach(e => {
+      if (e.execution_id && !finalEscalationsMap.has(e.execution_id)) {
+        finalEscalationsMap.set(e.execution_id, e);
+      }
+    });
+
+    const unified = Array.from(finalEscalationsMap.values());
 
     // Filter by status if requested
     const filtered = status && status !== 'ALL'
       ? unified.filter(e => e.status === status.toUpperCase())
       : unified;
 
-    console.log('[API] 📋 Final filtered escalations:', filtered.length, 'for status:', status);
-
-    // Sort by newest first
+    // Final sort: newest first
     filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
+    console.log('[API] 📋 Unified smart merge result:', filtered.length, 'records');
     return filtered;
   }
 
@@ -850,19 +831,25 @@ class ApiService {
       trigger_message?: string;
     }
   ) {
+    console.log('[API] 🎯 resolveEscalation called:', { id, notes, classification, userId, userName, escalationData });
+
     // Determine if the ID is a UUID (likely 'escalations' table) or a number string (likely 'executions' table)
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const isFromExecutions = !isUuid;
+
+    console.log('[API] 🎯 ID type:', isFromExecutions ? 'executions table' : 'escalations table');
 
     const resolvedAt = new Date().toISOString();
 
     // 1. If from executions table, update it
     if (isFromExecutions) {
+      console.log('[API] 🎯 Updating executions table for ID:', id);
       await this.updateEscalation(id, {
         escalation_status: 'RESOLVED',
         escalation_priority: classification,
         human_escalation_reason: notes ? `[RESOLVED by ${userName || 'operator'}] ${notes}` : undefined,
       }, 'executions');
+      console.log('[API] ✅ Executions table updated successfully');
     }
 
     // 2. Always persist to escalations table
@@ -997,6 +984,51 @@ class ApiService {
     return { success: true };
   }
 
+  async updateTeamMember(memberId: string, updates: { role?: string; full_name?: string }) {
+    console.log('[API] 👥 updateTeamMember called:', { memberId, updates });
+
+    // Update organization_members table for role
+    if (updates.role) {
+      const { error: roleError } = await supabase
+        .from('organization_members')
+        .update({ role: updates.role })
+        .eq('id', memberId)
+        .eq('organization_id', this.organizationId);
+
+      if (roleError) {
+        console.error('[API] ❌ Failed to update role:', roleError);
+        throw roleError;
+      }
+    }
+
+    // Update profiles table for full_name
+    if (updates.full_name) {
+      // Get user_id from organization_members first
+      const { data: member, error: fetchError } = await supabase
+        .from('organization_members')
+        .select('user_id')
+        .eq('id', memberId)
+        .single();
+
+      if (fetchError || !member) {
+        console.error('[API] ❌ Failed to fetch user_id for name update:', fetchError);
+        throw fetchError || new Error('Member not found');
+      }
+
+      const { error: nameError } = await supabase
+        .from('profiles')
+        .update({ full_name: updates.full_name })
+        .eq('id', member.user_id);
+
+      if (nameError) {
+        console.error('[API] ❌ Failed to update full_name:', nameError);
+        throw nameError;
+      }
+    }
+
+    console.log('[API] ✅ Team member updated successfully');
+  }
+
   /**
    * Manually insert a resolved escalation to Supabase
    * Use this to backfill escalations that weren't persisted
@@ -1055,9 +1087,16 @@ class ApiService {
   }
 
   async updateEscalation(id: string, updates: any, table: 'executions' | 'escalations' = 'executions') {
+    console.log(`[API] 🔄 updateEscalation called:`, { id, table, updates, organizationId: this.organizationId });
+
     // Use correct primary key column for each table
     const idColumn = table === 'executions' ? 'execution_id' : 'id';
-    const url = `${SUPABASE_URL}/rest/v1/${table}?${idColumn}=eq.${id}&organization_id=eq.${this.organizationId}`;
+
+    // Don't filter by organization_id in the URL - RLS policies handle this automatically
+    // This prevents silent failures when organization_id is null or mismatched
+    const url = `${SUPABASE_URL}/rest/v1/${table}?${idColumn}=eq.${id}`;
+
+    console.log(`[API] 🔄 Update URL:`, url);
 
     const response = await fetch(url, {
       method: 'PATCH',
@@ -1075,11 +1114,13 @@ class ApiService {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[API] Update ${table} failed:`, response.status, errorText);
+      console.error(`[API] ❌ Update ${table} failed:`, response.status, errorText);
       throw new Error(`Failed to update ${table}: ${response.status}`);
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log(`[API] ✅ Update ${table} success:`, result);
+    return result;
   }
 
 

@@ -12,12 +12,14 @@ import { api } from '@/backend/api';
 import { usePageData } from '@/frontend/hooks/usePageData';
 import { Escalation } from '@/backend/types';
 import { EscalationDetailModal } from '@/frontend/components/modals/EscalationDetailModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface EscalationsProps {
   searchTerm?: string;
 }
 
 export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
+  const { canResolveEscalations } = useAuth();
   const [selectedEscalation, setSelectedEscalation] = useState<Escalation | null>(null);
   const [activeSegment, setActiveSegment] = useState<'OPEN' | 'RESOLVED'>('OPEN');
 
@@ -140,7 +142,7 @@ export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
                     </div>
                   </div>
                   <AppButton variant="secondary" size="sm" className="font-bold">
-                    {item.status === 'RESOLVED' ? 'View Details' : 'View & Resolve'}
+                    {item.status === 'RESOLVED' || !canResolveEscalations ? 'View Details' : 'View & Resolve'}
                   </AppButton>
                 </div>
               </div>

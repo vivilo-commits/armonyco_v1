@@ -5,6 +5,9 @@
 ### Database & Security (RLS)
 - **Message Log Visibility**: `vivilo_whatsapp_history` requires a specific RLS policy for the `authenticated` role using `organization_id`. Without it, the Message Log appears empty even if data exists in the table.
 - **Multi-Tenant Integrity**: Always use standard `supabaseFetch` via `api.ts` which automatically injects `organization_id` filters.
+- **Hook & Singleton Race Conditions**: 
+  1. `useEffect` hooks defined *above* an early return still execute. Add explicit guards inside them.
+  2. Syncing singletons (like `api.organizationId`) in `useEffect` (post-render) is too late for child components (like `Dashboard`) that trigger fetches during their first render. Always sync singletons **synchronously** during state updates in the parent Context to ensure the value is available to the entire tree on the same tick.
 
 ### UI/UX & Design System (The Chameleon)
 - **AppCard Padding**: `AppCard` has default padding (`medium`). Adding manual padding (like `p-10`) to a component wrapping `AppCard` or to the `AppCard` itself via `className` without setting `padding="none"` results in "giant" cards that break the visual scale.
@@ -19,7 +22,11 @@
 
 ## 🛠️ Resolved Issues
 - **[2026-01-26] Blank Message Log**: Resolved by adding RLS policy and verifying `api.ts` fetch logic.
-- **[2026-01-26] Giant Controls Cards**: Reduced padding and radius in `Controls/index.tsx` to match institutional standards.
+- [2026-01-26] Giant Controls Cards: Reduced padding and radius in `Controls/index.tsx` to match institutional standards.
+- [2026-01-27] Smart Escalations History: Implemented "Smart Merge" in `api.ts` to combine `escalations` table (status) with `executions` table (history), fixing the "missing history" issue.
+- [2026-01-27] Org ID Init Bug: Resolved `organization_id` being null on first load by adding dependency to `App.tsx` useEffect.
+- [2026-01-27] Guest Labeling: Refined `phone_clean` to clearly distinguish unnamed guests as "Guest #[ExecutionID]".
+- [2026-01-27] Member Management: Implemented `updateTeamMember` API and `EditMemberModal` UI.
 
 ### Institutional Identity (The Governor)
 - **Terminology**: Use authoritative terms. "AI Resolution" → "Autonomous Resolution", "Revenue Captured" → "Revenue Governed".

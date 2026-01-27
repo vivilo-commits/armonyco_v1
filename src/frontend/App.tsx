@@ -85,11 +85,6 @@ const AppContent: React.FC = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
-  // Sync organization ID with API service
-  React.useEffect(() => {
-    api.setOrganizationId(organizationId);
-  }, [organizationId]);
-
   // Show session expired notification
   React.useEffect(() => {
     if (sessionExpired) {
@@ -134,6 +129,12 @@ const AppContent: React.FC = () => {
   // Fetch escalation count (OPEN only for notification badge)
   React.useEffect(() => {
     const fetchCount = async () => {
+      // Guard: Don't fetch if no org ID or if on landing page
+      if (!organizationId || currentView === View.LANDING) {
+        console.log('[App] 🛑 Skipping escalation fetch: No OrgID or Landing View');
+        return;
+      }
+
       try {
         const data = await api.getEscalationsData('OPEN');
         setEscalationCount(data?.length || 0);
@@ -145,7 +146,7 @@ const AppContent: React.FC = () => {
     // Refresh every 30 seconds for real-time feel
     const interval = setInterval(fetchCount, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [organizationId, currentView]);
 
   // Modal states
   const [showLogin, setShowLogin] = useState(false);

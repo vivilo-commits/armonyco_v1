@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PropertiesTable } from './PropertiesTable';
 
 
@@ -34,6 +34,7 @@ import { ConfigurePMSModal } from '@/frontend/components/modals/ConfigurePMSModa
 import { UploadKnowledgeModal } from '@/frontend/components/modals/UploadKnowledgeModal';
 import { Plans } from '@/frontend/components/modals/PlansModal';
 import { RechargeModal } from '@/frontend/components/modals/RechargeModal';
+import { EditMemberModal } from '@/frontend/components/modals/EditMemberModal';
 import { CreditTransaction } from '@/backend/types';
 import { Clock, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
@@ -53,13 +54,13 @@ interface TeamMember {
     full_name: string | null;
     email: string | null;
     phone: string | null;
-  };
+  } | null;
 }
 
 export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('IDENTITY');
   const { loading, error, retry } = usePageData(() => api.getSettingsData());
-  const { profile, organization, entitlements, membership, canEdit, canEditSettings, refreshProfile } = useAuth();
+  const { profile, organization, entitlements, membership, canEdit, canEditSettings, canManageTeam, canEditGeneralSettings, refreshProfile } = useAuth();
 
   // Tabs that managers cannot edit
   const readOnlyTabs: SettingsTab[] = canEditSettings ? [] : ['IDENTITY', 'ORGANIZATION', 'PROPERTIES', 'SYSTEM_ACTIVATION', 'SUBSCRIPTION'];
@@ -103,6 +104,10 @@ export const Settings: React.FC = () => {
   const [newRole, setNewRole] = useState('viewer');
   const [creating, setCreating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Edit member state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(false);
 
@@ -131,6 +136,25 @@ export const Settings: React.FC = () => {
     }
   }, [profile, organization]);
 
+  const fetchTeamMembers = useCallback(async () => {
+    if (!organization?.id) return;
+    setLoadingTeam(true);
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('organization_members')
+        .select('*, profiles(*)')
+        .eq('organization_id', organization.id)
+        .order('created_at', { ascending: true });
+
+      if (fetchError) throw fetchError;
+      setTeamMembers(data || []);
+    } catch (e) {
+      console.error('Failed to fetch team members:', e);
+    } finally {
+      setLoadingTeam(false);
+    }
+  }, [organization?.id]);
+
   useEffect(() => {
     if (activeTab === 'ORGANIZATION' && organization?.id) {
       fetchTeamMembers();
@@ -138,19 +162,7 @@ export const Settings: React.FC = () => {
     if (activeTab === 'SUBSCRIPTION' && organization?.id) {
       fetchTransactions();
     }
-  }, [activeTab, organization?.id]);
-
-  const fetchTeamMembers = async () => {
-    setLoadingTeam(true);
-    try {
-      const members = await api.getTeamMembers();
-      setTeamMembers(members as any);
-    } catch (e) {
-      console.error('Failed to fetch team members:', e);
-    } finally {
-      setLoadingTeam(false);
-    }
-  };
+  }, [activeTab, organization?.id, fetchTeamMembers]);
 
   const fetchTransactions = async () => {
     setLoadingTransactions(true);
@@ -219,8 +231,25 @@ export const Settings: React.FC = () => {
     }
   };
 
+  const handleEditMember = (member: TeamMember) => {
+    setSelectedMember(member);
+    setIsEditModalOpen(true);
+  };
+
+  const onSaveMember = async (memberId: string, updates: { role?: string; full_name?: string }) => {
+    try {
+      await api.updateTeamMember(memberId, updates);
+      await fetchTeamMembers();
+      setSaveMessage('Team member updated successfully');
+      setTimeout(() => setSaveMessage(''), 3000);
+    } catch (e) {
+      console.error('Failed to update team member:', e);
+      throw e;
+    }
+  };
+
   const handleSaveIdentity = async () => {
-    if (!profile) return;
+    if (!profile || !canEditGeneralSettings) return;
     setSaving(true);
     setSaveMessage('');
 
@@ -247,7 +276,7 @@ export const Settings: React.FC = () => {
   };
 
   const handleSaveOrganization = async () => {
-    if (!organization) return;
+    if (!organization || !canEditGeneralSettings) return;
     setSaving(true);
     setSaveMessage('');
 
@@ -494,7 +523,7 @@ export const Settings: React.FC = () => {
                       <h4 className="text-xs font-bold text-stone-600 uppercase tracking-widest flex items-center gap-2 mb-4">
                         <Users size={14} /> Team Members
                       </h4>
-                      {['owner', 'admin'].includes(membership?.role?.toLowerCase() || '') && (
+                      {canManageTeam && (
                         <div className="bg-white p-6 rounded-2xl border border-stone-200 space-y-4 mb-6">
                           <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mb-2">Create New Member</p>
                           <div className="flex flex-col lg:flex-row gap-3 items-stretch">
@@ -535,7 +564,6 @@ export const Settings: React.FC = () => {
                             >
                               <option value="viewer">Viewer</option>
                               <option value="manager">Manager</option>
-                              <option value="admin">Admin</option>
                             </select>
                             <AppButton
                               size="sm"
@@ -570,12 +598,21 @@ export const Settings: React.FC = () => {
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-stone-900">
-                                  {member.profiles?.full_name || 'Pending Invitation'}
+                                  {member.profiles?.full_name || member.profiles?.email || 'New Member'}
                                 </p>
                                 <p className="text-xs text-stone-500">{member.profiles?.email}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              {membership?.role?.toLowerCase() === 'owner' && (
+                                <button
+                                  onClick={() => handleEditMember(member)}
+                                  className="p-2 text-stone-400 hover:text-stone-900 hover:bg-stone-50 rounded-lg transition-all"
+                                  title="Edit Member"
+                                >
+                                  <FileText size={16} />
+                                </button>
+                              )}
                               <AppBadge variant={
                                 member.role === 'owner' ? 'success' :
                                   member.role === 'admin' ? 'warning' :
@@ -920,7 +957,7 @@ export const Settings: React.FC = () => {
                                 </td>
                                 <td className={`px-6 py-4 text-xs font-bold text-right ${tx.transaction_type === 'purchase' || tx.transaction_type === 'bonus' ? 'text-green-600' : 'text-stone-900'
                                   }`}>
-                                  {tx.transaction_type === 'purchase' || tx.transaction_type === 'bonus' ? '+' : '-'}{tx.credits_used.toLocaleString()}
+                                  {tx.credits_used.toLocaleString()}
                                 </td>
                                 <td className="px-6 py-4 text-xs font-mono text-stone-500 text-right">
                                   {tx.credits_after.toLocaleString()}
@@ -973,6 +1010,13 @@ export const Settings: React.FC = () => {
         currentBalance={entitlements?.credits_balance || 0}
         autoTopupEnabled={entitlements?.auto_topup_enabled}
         onSuccess={refreshProfile}
+      />
+
+      <EditMemberModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        member={selectedMember}
+        onSave={onSaveMember}
       />
     </AppPage>
   );

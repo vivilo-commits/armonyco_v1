@@ -27,7 +27,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
   escalation,
   onResolved,
 }) => {
-  const { canEdit, user, profile } = useAuth();
+  const { canEdit, user, profile, canResolveEscalations } = useAuth();
   const [showProofForm, setShowProofForm] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [history, setHistory] = React.useState<WhatsAppHistory[]>([]);
@@ -275,7 +275,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                     className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-gold-start"
                     value={formData.classification}
                     onChange={(e) => setFormData({ ...formData, classification: e.target.value })}
-                    disabled={!canEdit}
+                    disabled={!canResolveEscalations}
                   >
                     <option value="M1">M1 (Standard)</option>
                     <option value="M2">M2 (Follow-up)</option>
@@ -292,7 +292,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                     placeholder="Enter resolution notes or progress updates..."
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    disabled={!canEdit}
+                    disabled={!canResolveEscalations}
                   />
                 </div>
               </div>
@@ -405,7 +405,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                   variant="primary"
                   className="flex-1 gold-gradient !text-stone-900"
                   onClick={handleReopen}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !canResolveEscalations}
                   icon={isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Shield size={18} />}
                 >
                   {isSubmitting ? 'Reopening...' : 'Reopen Escalation'}
@@ -417,12 +417,12 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
                     className="flex-1"
                     onClick={() => setShowProofForm(true)}
                     icon={<CheckCircle2 size={18} />}
-                    disabled={!canEdit}
+                    disabled={!canResolveEscalations}
                   >
                     Resolve Escalation
                   </AppButton>
                   <AppButton variant="secondary" onClick={onClose}>
-                    Keep Open
+                    {canResolveEscalations ? 'Keep Open' : 'Close View'}
                   </AppButton>
                 </>
               )}
