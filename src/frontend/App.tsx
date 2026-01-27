@@ -324,7 +324,7 @@ const AppContent: React.FC = () => {
             </button>
 
             <div className="flex-1 flex flex-col overflow-hidden relative">
-              <div className="flex-1 overflow-y-auto w-full">
+              <div className="flex-1 overflow-y-auto w-full pt-16 md:pt-0">
                 <Suspense fallback={<div className="h-full flex items-center justify-center" />}>
                   {renderContent()}
                 </Suspense>
