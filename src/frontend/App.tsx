@@ -45,6 +45,8 @@ import {
   CreditsDepletedBanner,
 } from './components/SubscriptionGate';
 
+import { Menu } from 'lucide-react';
+
 const AppContent: React.FC = () => {
   // Navigation persistence mapping
   const hashToView = React.useMemo(() => ({
@@ -312,8 +314,17 @@ const AppContent: React.FC = () => {
               onLogout={handleLogout}
             />
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto">
+            {/* Mobile Menu Toggle */}
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="md:hidden fixed top-4 left-4 z-30 p-2 bg-white/80 backdrop-blur-md border border-stone-200 rounded-xl shadow-sm hover:bg-white text-stone-600 transition-all"
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+
+            <div className="flex-1 flex flex-col overflow-hidden relative">
+              <div className="flex-1 overflow-y-auto w-full">
                 <Suspense fallback={<div className="h-full flex items-center justify-center" />}>
                   {renderContent()}
                 </Suspense>
