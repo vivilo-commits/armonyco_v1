@@ -26,7 +26,16 @@
 - [2026-01-27] Smart Escalations History: Implemented "Smart Merge" in `api.ts` to combine `escalations` table (status) with `executions` table (history), fixing the "missing history" issue.
 - [2026-01-27] Org ID Init Bug: Resolved `organization_id` being null on first load by adding dependency to `App.tsx` useEffect.
 - [2026-01-27] Guest Labeling: Refined `phone_clean` to clearly distinguish unnamed guests as "Guest #[ExecutionID]".
-- [2026-01-27] Member Management: Implemented `updateTeamMember` API and `EditMemberModal` UI.
+- [2026-01-27] Real-time Sync & API Resilience:
+    1. **Sync**: Used `window.dispatchEvent(new CustomEvent('escalation-updated'))` to trigger cross-component updates (Sidebar count) without prop-drilling or excessive polling.
+    2. **Resilience**: Increased `API_TIMEOUT_MS` to 20s in `usePageData.ts` to accommodate cloud cold starts.
+    3. **Structural Guard**: Fixed a critical `ApiService` class closure bug that was causing "Something went wrong" errors by breaking the data layer. Always verify class scoping in large singleton files.
+- [2026-01-27] Institutional Iconography: Aligned navigation with "The Chameleon" standards: Controls → `Cpu`, Escalations → `Activity`, Growth → `BarChart3`.
+- [2026-01-27] Escalation Resolution Stability:
+    1. **ON CONFLICT Fix (42P10)**: The `auto_insert_escalation` trigger on `executions` requires a unique constraint on `escalations(execution_id, organization_id)`. Without it, UPDATE/INSERT operations fail silently with `42P10`.
+    2. **ID Cleaning**: Execution IDs may arrive as "Guest #18685" or "AR018685". Always use `id.replace(/[^0-9]/g, '')` to extract the numeric `execution_id` before querying `executions`/`escalations`.
+    3. **Supabase Timeout**: Cloud triggers (like `auto_insert_escalation`) add latency. Use `Promise.race` with a 30s timeout to prevent infinite hangs while still allowing complex operations to complete.
+    4. **Frontend RBAC**: Viewers cannot resolve escalations. This is enforced in `AuthContext.canResolveEscalations`, not RLS. RLS allows all organization members to UPDATE for flexibility; UI gates actions.
 
 ### Institutional Identity (The Governor)
 - **Terminology**: Use authoritative terms. "AI Resolution" → "Autonomous Resolution", "Revenue Captured" → "Revenue Governed".

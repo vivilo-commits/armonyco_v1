@@ -40,6 +40,41 @@ class ApiService {
     return this.organizationId;
   }
 
+  async ensureOrganizationId(): Promise<string | null> {
+    if (this.organizationId) {
+      return this.organizationId;
+    }
+
+    console.log('[API] 🔄 organizationId is null, attempting recovery...');
+
+    // Try to fetch from current user's membership
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.warn('[API] ⚠️ No authenticated user found during recovery');
+        return null;
+      }
+
+      const { data: membership } = await supabase
+        .from('organization_members')
+        .select('organization_id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (membership?.organization_id) {
+        console.log('[API] ✅ Recovered organization_id from session:', membership.organization_id);
+        this.setOrganizationId(membership.organization_id);
+        return membership.organization_id;
+      }
+
+      console.warn('[API] ⚠️ User has no organization membership');
+      return null;
+    } catch (error) {
+      console.error('[API] ❌ Failed to recover organization_id:', error);
+      return null;
+    }
+  }
+
   /**
    * Fetch using Supabase JS client (proven working pattern from docs/api/hotels.ts)
    * Handles authentication and RLS automatically
@@ -56,9 +91,14 @@ class ApiService {
     } = {}
   ): Promise<T | null> {
     try {
-      console.log(`[API] 🔍 Fetching ${table} with org_id: ${this.organizationId}`);
+      // PROACTIVE AUTO-RECOVERY: If orgId is missing, try to get it before proceeding
       if (!this.organizationId) {
-        console.warn(`[API] ⚠️ No organization_id set! Data fetch for ${table} might be empty or unrestricted.`);
+        await this.ensureOrganizationId();
+      }
+
+      console.log(`[API] 🔍 supabaseFetch | Table: ${table} | OrgID: ${this.organizationId}`);
+      if (!this.organizationId) {
+        console.warn(`[API] ⚠️ No organization_id available for fetch on ${table} - RLS might block this.`);
       }
 
       let query = supabase.from(table).select(options.select || '*');
@@ -144,6 +184,9 @@ class ApiService {
   // --- Dashboard Data ---
 
   async getDashboardData(startDate?: string, endDate?: string) {
+    // Ensure organization_id is set
+    await this.ensureOrganizationId();
+
     // Import cashflow aggregation
     const { getCashflowAggregation, getCashflowForPeriod } = await import('./cashflow-api');
 
@@ -274,6 +317,9 @@ class ApiService {
   // --- Growth Data ---
 
   async getGrowthData(startDate?: string, endDate?: string) {
+    // Ensure organization_id is set
+    await this.ensureOrganizationId();
+
     // Fetch executions using started_at for consistency with Dashboard
     const executions = await this.supabaseFetch<Execution[]>('executions', {
       range: startDate || endDate ? { column: 'started_at', start: startDate, end: endDate } : undefined,
@@ -372,33 +418,49 @@ class ApiService {
   // --- Controls Data ---
 
   async getSettingsData() {
-    const [engines, addons, settings, entitlements] = await Promise.all([
-      this.supabaseFetch<ControlEngine[]>('engines'),
-      this.supabaseFetch<ControlAddon[]>('addons'),
-      this.supabaseFetch<any[]>('settings', { limit: 1 }),
-      this.supabaseFetch<any[]>('organization_entitlements', { limit: 1 }),
-    ]);
+    console.log('[API] ⚙️ Fetching settings data...');
+    // Ensure organization_id is set
+    await this.ensureOrganizationId();
 
-    const config = settings?.[0] || {};
+    try {
+      const [engines, addons, settings, entitlements] = await Promise.all([
+        this.supabaseFetch<ControlEngine[]>('engines'),
+        this.supabaseFetch<ControlAddon[]>('addons'),
+        this.supabaseFetch<any[]>('settings', { limit: 1 }),
+        this.supabaseFetch<any[]>('organization_entitlements', { limit: 1 }),
+      ]);
 
-    return {
-      toneOfVoice: config.tone_of_voice || 'Professional & Warm',
-      languages: config.languages || ['English', 'Italian'],
-      formalityLevel: config.formality_level || 'High',
-      brandKeywords: config.brand_keywords || 'Premium, Reliability',
-      intelligenceMode: config.intelligence_mode || 'Pro',
-      // Dynamic Booleans
-      enableShadowMode: !!config.enable_shadow_mode,
-      enableMultiLanguage: config.enable_multi_language !== false,
-      strictGovernance: config.strict_governance !== false,
-      autoUpsell: config.auto_upsell !== false,
-      autoEarlyCheckin: !!config.auto_early_checkin,
-      autoLateCheckout: !!config.auto_late_checkout,
-      selfCorrection: config.self_correction !== false,
-      engines: engines || [],
-      addons: addons || [],
-      entitlements: entitlements?.[0] || null,
-    };
+      console.log('[API] ⚙️ Settings fetch results:', {
+        engines: engines?.length || 0,
+        addons: addons?.length || 0,
+        settings: !!settings?.[0],
+        entitlements: !!entitlements?.[0]
+      });
+
+      const config = settings?.[0] || {};
+
+      return {
+        toneOfVoice: config.tone_of_voice || 'Professional & Warm',
+        languages: config.languages || ['English', 'Italian'],
+        formalityLevel: config.formality_level || 'High',
+        brandKeywords: config.brand_keywords || 'Premium, Reliability',
+        intelligenceMode: config.intelligence_mode || 'Pro',
+        // Dynamic Booleans
+        enableShadowMode: !!config.enable_shadow_mode,
+        enableMultiLanguage: config.enable_multi_language !== false,
+        strictGovernance: config.strict_governance !== false,
+        autoUpsell: config.auto_upsell !== false,
+        autoEarlyCheckin: !!config.auto_early_checkin,
+        autoLateCheckout: !!config.auto_late_checkout,
+        selfCorrection: config.self_correction !== false,
+        engines: engines || [],
+        addons: addons || [],
+        entitlements: entitlements?.[0] || null,
+      };
+    } catch (error) {
+      console.error('[API] ❌ getSettingsData failed:', error);
+      throw error;
+    }
   }
 
   async getControlsData() {
@@ -422,6 +484,7 @@ class ApiService {
   }
 
   async getCreditTransactions() {
+    await this.ensureOrganizationId();
     return this.supabaseFetch<CreditTransaction[]>('credits_transactions', {
       order: { column: 'created_at', ascending: false },
       limit: 50
@@ -593,6 +656,9 @@ class ApiService {
   async getEscalationsData(status?: string, startDate?: string, endDate?: string): Promise<Escalation[]> {
     console.log('[API] 📋 getEscalationsData called with status:', status, 'Period:', { startDate, endDate });
 
+    // Ensure organization_id is set
+    await this.ensureOrganizationId();
+
     // 1. Fetch from 'escalations' (dedicated table) - PRIMARY SOURCE for User Status
     const escalationsRes = await this.supabaseFetch<Escalation[]>('escalations', {
       range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
@@ -743,6 +809,9 @@ class ApiService {
   async getEscalationContext(identifier?: string, aiOutput?: string) {
     console.log('[API] 📱 getEscalationContext called with:', { identifier, aiOutputLength: aiOutput?.length });
 
+    // Ensure organization_id is set
+    await this.ensureOrganizationId();
+
     if (!identifier && !aiOutput) {
       console.log('[API] ⚠️ No identifier or aiOutput provided');
       return { history: [] };
@@ -829,131 +898,169 @@ class ApiService {
       reason?: string;
       workflow?: string;
       trigger_message?: string;
+      execution_id?: string;
     }
   ) {
-    console.log('[API] 🎯 resolveEscalation called:', { id, notes, classification, userId, userName, escalationData });
+    console.log('[API] [STEP 1] resolveEscalation called:', { id, notes, classification, userId, userName });
 
-    // Determine if the ID is a UUID (likely 'escalations' table) or a number string (likely 'executions' table)
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-    const isFromExecutions = !isUuid;
+    try {
+      // Determine if the ID is a UUID (likely 'escalations' table) or a number string (likely 'executions' table)
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      const isFromExecutions = !isUuid;
+      const resolvedAt = new Date().toISOString();
 
-    console.log('[API] 🎯 ID type:', isFromExecutions ? 'executions table' : 'escalations table');
-
-    const resolvedAt = new Date().toISOString();
-
-    // 1. If from executions table, update it
-    if (isFromExecutions) {
-      console.log('[API] 🎯 Updating executions table for ID:', id);
-      await this.updateEscalation(id, {
-        escalation_status: 'RESOLVED',
-        escalation_priority: classification,
-        human_escalation_reason: notes ? `[RESOLVED by ${userName || 'operator'}] ${notes}` : undefined,
-      }, 'executions');
-      console.log('[API] ✅ Executions table updated successfully');
-    }
-
-    // 2. Always persist to escalations table
-    const phoneClean = escalationData?.phone_clean || id;
-    const orgId = this.organizationId;
-
-    console.log('[API] resolveEscalation - Persisting to escalations table:', {
-      phoneClean,
-      orgId,
-      userId,
-      userName,
-      hasEscalationData: !!escalationData
-    });
-
-    // Skip if no organization_id
-    if (!orgId) {
-      console.error('[API] Cannot persist escalation: organization_id is null');
-      return { success: true }; // Still return success for the executions update
-    }
-
-    // First check if escalation already exists for this phone/org
-    const { data: existing, error: selectError } = await supabase
-      .from('escalations')
-      .select('id')
-      .eq('phone_clean', phoneClean)
-      .eq('organization_id', orgId)
-      .maybeSingle();
-
-    if (selectError) {
-      console.error('[API] Error checking existing escalation:', selectError);
-    }
-
-    const escalationRecord = {
-      execution_id: isFromExecutions ? id : phoneClean,
-      phone_clean: phoneClean,
-      status: 'RESOLVED' as const,
-      priority: classification || 'M1',
-      reason: escalationData?.reason || notes || 'Resolved via UI',
-      resolution_notes: notes || '',
-      resolved_by: userId || null,
-      resolved_by_name: userName || 'System',
-      resolved_at: resolvedAt,
-      organization_id: orgId,
-      metadata: {
-        workflow: escalationData?.workflow || 'System',
-        trigger_message: escalationData?.trigger_message || '',
-        resolved_by_name: userName || 'System',
-      },
-      updated_at: resolvedAt,
-    };
-
-    console.log('[API] Escalation record to persist:', escalationRecord);
-
-    if (existing?.id) {
-      // Update existing record
-      console.log('[API] Updating existing escalation:', existing.id);
-      const { error: updateError } = await supabase
-        .from('escalations')
-        .update(escalationRecord)
-        .eq('id', existing.id);
-
-      if (updateError) {
-        console.error('[API] Failed to update escalation record:', JSON.stringify(updateError));
-      } else {
-        console.log('[API] Successfully updated escalation in Supabase');
+      // Clean ID for executions table (remove "Guest #" or "AR0" prefixes if they exist)
+      let cleanTargetId = id;
+      if (isFromExecutions) {
+        cleanTargetId = id.replace(/[^0-9]/g, '');
+        console.log(`[API] 🧹 Cleaned ID for executions: ${id} -> ${cleanTargetId}`);
       }
-    } else {
-      // Insert new record
-      console.log('[API] Inserting new escalation record for:', phoneClean);
-      const { data: insertData, error: insertError } = await supabase
-        .from('escalations')
-        .insert({
+
+      // Helper for timeout-protected Supabase queries
+      const withTimeout = async <T>(promise: any, timeoutMs: number = 30000): Promise<T> => {
+        return Promise.race([
+          promise as Promise<T>,
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Supabase query timed out')), timeoutMs)
+          )
+        ]);
+      };
+
+      // 1. If from executions table, update it
+      if (isFromExecutions) {
+        console.log('[API] [STEP 2] Updating executions table for ID:', cleanTargetId);
+        await withTimeout(this.updateEscalation(cleanTargetId, {
+          escalation_status: 'RESOLVED',
+          escalation_priority: classification,
+          human_escalation_reason: notes ? `[RESOLVED by ${userName || 'operator'}] ${notes}` : undefined,
+        }, 'executions'));
+        console.log('[API] [STEP 3] Executions table updated successfully');
+      }
+
+      // 2. Always persist to escalations table
+      const phoneClean = escalationData?.phone_clean || id;
+      const orgId = await this.ensureOrganizationId();
+
+      console.log('[API] [STEP 4] Recovered OrgID:', orgId);
+
+      // Skip if no organization_id
+      if (!orgId) {
+        console.error('[API] [FAILURE] Cannot persist escalation: organization_id is null');
+        return { success: true };
+      }
+
+      // First check if escalation already exists
+      console.log('[API] [STEP 5] Checking for existing escalation record...');
+      let existing: { id: string } | null = null;
+      let selectError: any = null;
+
+      if (!isFromExecutions) {
+        const result = await withTimeout(supabase
+          .from('escalations')
+          .select('id')
+          .eq('id', id)
+          .eq('organization_id', orgId)
+          .limit(1));
+        const res = result as any;
+        existing = res.data?.[0] || null;
+        selectError = res.error;
+      } else {
+        const result = await withTimeout(supabase
+          .from('escalations')
+          .select('id')
+          .eq('execution_id', cleanTargetId)
+          .eq('organization_id', orgId)
+          .limit(1));
+        const res = result as any;
+        existing = res.data?.[0] || null;
+        selectError = res.error;
+      }
+
+      if (selectError) {
+        console.error('[API] [ERROR] Error checking existing escalation:', selectError);
+      }
+      console.log('[API] [STEP 6] Existing check result:', { existingId: existing?.id });
+
+      const escalationRecord = {
+        execution_id: escalationData?.execution_id || (isFromExecutions ? id : undefined),
+        phone_clean: phoneClean,
+        status: 'RESOLVED' as const,
+        priority: classification || 'M1',
+        reason: escalationData?.reason || notes || 'Resolved via UI',
+        resolution_notes: notes || '',
+        resolved_by: userId || null,
+        resolved_by_name: userName || 'System',
+        resolved_at: resolvedAt,
+        organization_id: orgId,
+        metadata: escalationData?.workflow || escalationData?.trigger_message ? {
+          workflow: escalationData?.workflow || 'System',
+          trigger_message: escalationData?.trigger_message || '',
+          resolved_by_name: userName || 'System',
+        } : null,
+        updated_at: resolvedAt,
+      };
+
+      if (existing?.id) {
+        console.log('[API] [STEP 7] Updating existing escalation:', existing.id);
+        const result = await withTimeout(supabase
+          .from('escalations')
+          .update(escalationRecord)
+          .eq('id', existing.id));
+
+        const res = result as any;
+        if (res.error) throw res.error;
+        console.log('[API] [STEP 8] Successfully updated escalation in Supabase');
+      } else {
+        console.log('[API] [STEP 7] Inserting new escalation record for:', phoneClean);
+        const recordToInsert = {
           ...escalationRecord,
           created_at: resolvedAt,
-        })
-        .select();
+        };
+        const result = await withTimeout(supabase
+          .from('escalations')
+          .insert(recordToInsert));
 
-      if (insertError) {
-        console.error('[API] Failed to insert escalation record:', JSON.stringify(insertError));
-        console.error('[API] Insert error details:', insertError.message, insertError.details, insertError.hint);
-      } else {
-        console.log('[API] Successfully inserted escalation to Supabase:', insertData);
+        const res = result as any;
+        if (res.error) throw res.error;
+        console.log('[API] [STEP 8] Successfully inserted escalation to Supabase');
       }
-    }
 
-    // 3. If originally from escalations table, also update it directly
-    if (!isFromExecutions) {
-      await this.updateEscalation(id, {
-        status: 'RESOLVED',
-        resolution_notes: notes,
-        priority: classification,
-        resolved_by: userId,
-        resolved_by_name: userName,
-        resolved_at: resolvedAt,
-      }, 'escalations');
-    }
+      // Dispatch event for real-time UI sync
+      console.log('[API] [STEP 9] Dispatching escalation-updated event');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('escalation-updated'));
+      }
 
-    return { success: true };
+      console.log('[API] [STEP 10] resolveEscalation completed successfully');
+      return { success: true };
+    } catch (error) {
+      console.error('[API] [CRITICAL FAILURE] resolveEscalation failed:', error);
+      throw error; // Re-throw so the UI can catch it and hide the spinner
+    }
   }
 
   async reopenEscalation(id: string) {
-    console.log('[API] 🔓 Reopening escalation:', id);
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    console.log('[API] [REOPEN] reopenEscalation called:', id);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const isFromExecutions = !isUuid;
+    const resolvedAt = new Date().toISOString();
+
+    // Clean ID for executions table
+    let cleanTargetId = id;
+    if (isFromExecutions) {
+      cleanTargetId = id.replace(/[^0-9]/g, '');
+      console.log(`[API] 🧹 Cleaned ID for reopen: ${id} -> ${cleanTargetId}`);
+    }
+
+    // Helper for timeout-protected Supabase queries
+    const withTimeout = async <T>(promise: any, timeoutMs: number = 30000): Promise<T> => {
+      return Promise.race([
+        promise as Promise<T>,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase query timed out')), timeoutMs)
+        )
+      ]);
+    };
 
     const updates = {
       status: 'OPEN',
@@ -961,27 +1068,66 @@ class ApiService {
       resolved_by: null,
       resolved_by_name: null,
       resolution_notes: null,
+      updated_at: resolvedAt,
     };
 
-    if (isFromExecutions) {
-      // Update executions table
-      await this.updateEscalation(id, {
-        escalation_status: 'OPEN',
-      }, 'executions');
+    try {
+      if (isFromExecutions) {
+        // Update executions table
+        await withTimeout(this.updateEscalation(cleanTargetId, {
+          escalation_status: 'OPEN',
+        }, 'executions'));
+      }
+
+      // Update escalations table
+      const orgId = await this.ensureOrganizationId();
+      if (!orgId) {
+        console.warn('[API] Cannot query escalations: organization_id is null');
+        return { success: true };
+      }
+
+      console.log('[API] [REOPEN] Checking for existing escalation...');
+      let existing: { id: string } | null = null;
+      if (!isFromExecutions) {
+        const result = await withTimeout(supabase
+          .from('escalations')
+          .select('id')
+          .eq('id', id)
+          .eq('organization_id', orgId)
+          .limit(1));
+        const res = result as any;
+        existing = res.data?.[0] || null;
+      } else {
+        const result = await withTimeout(supabase
+          .from('escalations')
+          .select('id')
+          .eq('execution_id', cleanTargetId)
+          .eq('organization_id', orgId)
+          .limit(1));
+        const res = result as any;
+        existing = res.data?.[0] || null;
+      }
+
+      if (existing?.id) {
+        console.log('[API] [REOPEN] Updating status to OPEN for escalation:', existing.id);
+        const result = await withTimeout(supabase
+          .from('escalations')
+          .update(updates)
+          .eq('id', existing.id));
+        const res = result as any;
+        if (res.error) throw res.error;
+      }
+
+      // Dispatch event for real-time UI sync
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('escalation-updated'));
+      }
+
+      return { success: true };
+    } catch (error) {
+      console.error('[API] [REOPEN FAILURE] Error reopening escalation:', error);
+      throw error;
     }
-
-    // Update escalations table
-    const { data: existing } = await supabase
-      .from('escalations')
-      .select('id')
-      .or(`execution_id.eq.${id},id.eq.${id}`)
-      .maybeSingle();
-
-    if (existing?.id) {
-      await this.updateEscalation(existing.id, updates, 'escalations');
-    }
-
-    return { success: true };
   }
 
   async updateTeamMember(memberId: string, updates: { role?: string; full_name?: string }) {
@@ -1092,35 +1238,27 @@ class ApiService {
     // Use correct primary key column for each table
     const idColumn = table === 'executions' ? 'execution_id' : 'id';
 
-    // Don't filter by organization_id in the URL - RLS policies handle this automatically
-    // This prevents silent failures when organization_id is null or mismatched
-    const url = `${SUPABASE_URL}/rest/v1/${table}?${idColumn}=eq.${id}`;
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq(idColumn, id)
+        .select();
 
-    console.log(`[API] 🔄 Update URL:`, url);
+      if (error) {
+        console.error(`[API] ❌ Update ${table} failed:`, error);
+        throw error;
+      }
 
-    const response = await fetch(url, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPABASE_ANON_KEY,
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation'
-      },
-      body: JSON.stringify({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[API] ❌ Update ${table} failed:`, response.status, errorText);
-      throw new Error(`Failed to update ${table}: ${response.status}`);
+      console.log(`[API] ✅ Update ${table} success:`, data);
+      return data;
+    } catch (err) {
+      console.error(`[API] ❌ Critical error in updateEscalation:`, err);
+      throw err;
     }
-
-    const result = await response.json();
-    console.log(`[API] ✅ Update ${table} success:`, result);
-    return result;
   }
 
 
@@ -1162,6 +1300,7 @@ class ApiService {
   // --- Message Log ---
 
   async getConversationsData() {
+    await this.ensureOrganizationId();
     // Get the LATEST 1000 messages (ordered by ID desc to ensure we get newest)
     const history = await this.supabaseFetch<WhatsAppHistory[]>('vivilo_whatsapp_history', {
       order: { column: 'id', ascending: false },
@@ -1267,6 +1406,7 @@ class ApiService {
   // --- Cashflow / Governed Value ---
 
   async getCashflowData() {
+    await this.ensureOrganizationId();
     const data = await this.supabaseFetch<CashflowSummary[]>('cashflow_summary', {
       order: { column: 'created_at', ascending: false }
     });
@@ -1290,6 +1430,7 @@ class ApiService {
 
   async getAuditData(startDate?: string, endDate?: string) {
     console.log('[API] 🛡️ Generating Governance Audit Data... Period:', { startDate, endDate });
+    await this.ensureOrganizationId();
 
     const [dashboardData, growthData, openEscalations, allEscalations] = await Promise.all([
       this.getDashboardData(startDate, endDate),

@@ -1,9 +1,9 @@
 import {
     LayoutDashboard,
-    TrendingUp,
-    AlertCircle,
+    BarChart3,
+    Activity,
     MessageSquare,
-    Server,
+    Cpu,
     Settings,
 } from 'lucide-react';
 import { Plan } from '@/backend/types';
@@ -11,10 +11,10 @@ import { Plan } from '@/backend/types';
 // NAVIGATION
 export const NAV_ITEMS = [
     { id: 'DASHBOARD', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-    { id: 'GROWTH', label: 'Growth', icon: <TrendingUp size={20} /> },
-    { id: 'ESCALATIONS', label: 'Escalations', icon: <AlertCircle size={20} /> },
+    { id: 'GROWTH', label: 'Growth', icon: <BarChart3 size={20} /> },
+    { id: 'ESCALATIONS', label: 'Escalations', icon: <Activity size={20} /> },
     { id: 'MESSAGE_LOG', label: 'Message Log', icon: <MessageSquare size={20} /> },
-    { id: 'CONTROLS', label: 'Controls', icon: <Server size={20} /> },
+    { id: 'CONTROLS', label: 'Controls', icon: <Cpu size={20} /> },
     { id: 'SETTINGS', label: 'Settings', icon: <Settings size={20} /> },
 ];
 

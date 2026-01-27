@@ -131,7 +131,6 @@ const AppContent: React.FC = () => {
     const fetchCount = async () => {
       // Guard: Don't fetch if no org ID or if on landing page
       if (!organizationId || currentView === View.LANDING) {
-        console.log('[App] 🛑 Skipping escalation fetch: No OrgID or Landing View');
         return;
       }
 
@@ -142,10 +141,23 @@ const AppContent: React.FC = () => {
         console.error('Failed to fetch escalation count', e);
       }
     };
+
     fetchCount();
+
+    // Listen for custom escalation-updated events
+    const handleSync = () => {
+      console.log('[App] 🔄 Escalation update detected, refreshing count...');
+      fetchCount();
+    };
+
+    window.addEventListener('escalation-updated', handleSync);
+
     // Refresh every 30 seconds for real-time feel
     const interval = setInterval(fetchCount, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('escalation-updated', handleSync);
+      clearInterval(interval);
+    };
   }, [organizationId, currentView]);
 
   // Modal states

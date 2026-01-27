@@ -119,6 +119,7 @@ export const EscalationDetailModal: React.FC<EscalationDetailModalProps> = ({
           reason: escalation.reason || escalation.metadata?.reason,
           workflow: escalation.metadata?.workflow,
           trigger_message: escalation.metadata?.trigger_message,
+          execution_id: escalation.execution_id,
         }
       );
       onResolved?.();
