@@ -350,11 +350,12 @@ export function normalizePlatform(channel: string): string {
 }
 
 export function normalizePriority(priority: string): Priority {
-    const p = priority?.toLowerCase();
-    if (p === 'critical' || p === 'urgent') return 'Critical';
-    if (p === 'high') return 'High';
-    if (p === 'medium') return 'Medium';
-    return 'Low';
+    const p = priority?.toLowerCase()?.trim();
+    // M-nomenclature passthrough
+    if (p === 'm1' || p === 'low' || p === 'routine') return 'M1';
+    if (p === 'm2' || p === 'medium' || p === 'moderate' || p === 'high') return 'M2';
+    if (p === 'm3' || p === 'critical' || p === 'urgent' || p === 'emergency') return 'M3';
+    return 'M1'; // Default to lowest priority
 }
 
 export function normalizeRiskLevel(level: string): RiskLevel {

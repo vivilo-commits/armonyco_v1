@@ -171,7 +171,10 @@ class ApiService {
       const resultCount = Array.isArray(data) ? data.length : (data ? 1 : 0);
       console.log(`[API] ✅ ${table}: ${resultCount} rows retrieved`);
       if (resultCount === 0) {
-        console.warn(`[API] ⚠️ ${table} returned ZERO results - this may indicate a filtering issue`);
+        console.warn(`[API] ⚠️ ${table} returned ZERO results. Filters used:`, {
+          orgId: this.organizationId,
+          options
+        });
       }
       return data as T;
     } catch (error) {
@@ -732,8 +735,8 @@ class ApiService {
           phone_clean: phoneClean || (sessionId && sessionId.length > 5 ? sessionId : `Guest #${exec.execution_id}`),
           execution_id: exec.execution_id,
           status: 'OPEN', // Default, will be overridden by escalations table
-          priority: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'LOW'),
-          classification: normalizePriority(exec.escalation_priority || workflowData?.escalation?.priority || 'M1'),
+          priority: normalizePriority((exec.escalation_priority && exec.escalation_priority.trim()) || workflowData?.escalation?.priority || 'M1'),
+          classification: normalizePriority((exec.escalation_priority && exec.escalation_priority.trim()) || workflowData?.escalation?.priority || 'M1'),
           reason: exec.human_escalation_reason || workflowData?.human_escalation_reason || workflowData?.test_reason || 'Human intervention required',
           resolved_by_name: resolvedByName,
           resolved_at: undefined,

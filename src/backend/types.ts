@@ -28,7 +28,7 @@ export type Verdict =
 
 export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical' | 'CRITICAL';
 
-export type Priority = 'Low' | 'Medium' | 'High' | 'Critical' | 'CRITICAL';
+export type Priority = 'M1' | 'M2' | 'M3';
 
 // View enum for app navigation
 export enum View {
