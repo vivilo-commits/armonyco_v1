@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/backend/api';
 
 // Timeout for API calls - prevents infinite loading
-const API_TIMEOUT_MS = 20000; // 20 seconds - handle slow initial fetches and cloud cold starts
+const API_TIMEOUT_MS = 40000; // 40 seconds - generous timeout to accommodate backend latencies
 
 export function usePageData<T>(apiCall: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
