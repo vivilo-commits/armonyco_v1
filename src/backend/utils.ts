@@ -70,8 +70,43 @@ export function calculateDashboardKPIs(
     const totalTimeSaved = finishedExecutions.reduce((acc, curr) => acc + (curr.time_saved_seconds || 0), 0);
     const avgTimeSaved = totalCount > 0 ? Math.round(totalTimeSaved / totalCount) : 0;
 
-    // Count Lara executions - each Lara workflow execution = 1 template sent
-    const laraTemplatesSent = executions.filter((e) => e.workflow_name?.toLowerCase() === 'lara').length;
+    // Count actual templates sent from Lara workflow
+    // Each Lara execution can send multiple WhatsApp templates depending on operation type:
+    // - New Bookings: 1 template
+    // - Check-in: 1 template (plus potentially transfer/breakfast)
+    // - Check-out: 1 template
+    // - Transfer Marketing: 1 template
+    // - Breakfast Marketing: 1 template
+    const laraTemplatesSent = executions
+        .filter((e) => e.workflow_name?.toLowerCase() === 'lara')
+        .reduce((total, exec) => {
+            // Try to parse workflow_output to get actual template count
+            let templates = 1; // Default: at least 1 template per execution
+
+            if (exec.workflow_output) {
+                try {
+                    const output = typeof exec.workflow_output === 'string'
+                        ? JSON.parse(exec.workflow_output)
+                        : exec.workflow_output;
+
+                    // Check for explicit template count in output
+                    if (output.templates_sent) {
+                        templates = Number(output.templates_sent);
+                    } else if (output.whatsapp_templates_sent) {
+                        templates = Number(output.whatsapp_templates_sent);
+                    } else {
+                        // Estimate based on operation type or execution success
+                        // Lara typically sends 1-3 templates per successful execution
+                        templates = exec.finished ? 1 : 0;
+                    }
+                } catch (e) {
+                    // If parsing fails, default to 1 template
+                    templates = exec.finished ? 1 : 0;
+                }
+            }
+
+            return total + templates;
+        }, 0);
 
     return [
         {
@@ -177,10 +212,10 @@ export function calculateDashboardKPIs(
         {
             id: 'avg-time-saved',
             label: 'Human Load Removed',
-            value: `${(avgTimeSaved / 60).toFixed(1)}m`,
+            value: `${(avgTimeSaved / 60).toFixed(1)} min/op`,
             trend: 0,
             trendLabel: 'Efficiency',
-            subtext: 'Time reclaimed from manual operations.',
+            subtext: 'Average time saved per operation.',
             status: 'success',
         }
     ];
