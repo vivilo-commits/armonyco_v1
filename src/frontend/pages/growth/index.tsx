@@ -17,14 +17,12 @@ import {
 
 import { api } from '@/backend/api';
 import { usePageData } from '@/frontend/hooks/usePageData';
-import { useAuth } from '@/frontend/contexts/AuthContext';
 
 interface GrowthProps {
   searchTerm?: string;
 }
 
 export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
-  const { organizationId } = useAuth();
   const [period, setPeriod] = React.useState('all');
   const [customStart, setCustomStart] = React.useState('');
   const [customEnd, setCustomEnd] = React.useState('');

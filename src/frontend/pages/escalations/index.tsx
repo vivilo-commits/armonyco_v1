@@ -19,7 +19,7 @@ interface EscalationsProps {
 }
 
 export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
-  const { canResolveEscalations, organizationId } = useAuth();
+  const { canResolveEscalations } = useAuth();
   const [selectedEscalation, setSelectedEscalation] = useState<Escalation | null>(null);
   const [activeSegment, setActiveSegment] = useState<'OPEN' | 'RESOLVED'>('OPEN');
 

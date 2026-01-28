@@ -38,7 +38,7 @@ interface ControlsProps {
 }
 
 export const Controls: React.FC<ControlsProps> = () => {
-    const { canEdit, organizationId } = useAuth();
+    const { canEdit } = useAuth();
     const [showSaveModal, setShowSaveModal] = React.useState(false);
     const { data, loading, error, retry } = usePageData<{
         toneOfVoice: string;

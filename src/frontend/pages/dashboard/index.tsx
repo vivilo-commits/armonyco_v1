@@ -24,13 +24,11 @@ import { ConfigurePMSModal } from '@/frontend/components/modals/ConfigurePMSModa
 import { GovernanceAuditModal } from '@/frontend/components/modals/GovernanceAuditModal';
 import { Building2 } from 'lucide-react';
 import { KPIExplanationModal } from '@/frontend/components/modals/KPIExplanationModal';
-import { useAuth } from '@/frontend/contexts/AuthContext';
 
 const INITIAL_VISIBLE_COUNT = 20;
 const LOAD_MORE_COUNT = 20;
 
 export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => {
-  const { organizationId } = useAuth();
   const [period, setPeriod] = React.useState('all');
   const [customStart, setCustomStart] = React.useState('');
   const [customEnd, setCustomEnd] = React.useState('');
