@@ -46,10 +46,10 @@ This document serves as the institutional memory for the Armonyco project. It re
 
 ### Sentinel-Level Auth Fix & KPI Refinement (Phase 4)
 - [2026-01-28] **API Singleton as Single Source of Truth**: API methods handle auth waiting internally via `ensureOrganizationId()`. Pages no longer need to check `organizationId` before fetching.
-- [2026-01-28] **KPI Differentiation**: 
-  - Decision Latency = P50 (median) execution time
-  - Average Runtime = arithmetic mean execution time
-  - Automation Rate now shows 1 decimal (xx.x%)
-- [2026-01-28] **Lint Cleanup**: Removed unused `organizationId` and `useAuth` imports from Dashboard, Growth, Escalations, Controls, and Settings pages.
-- [2026-01-28] **Messages Page**: Added discrete conversation count badge next to "Protocol Executions" header.
+- [2026-01-28] **KPI Differentiation & Precision**: 
+  - Decision Latency = P50 (median)
+  - Average Runtime = arithmetic mean
+  - Automation & Resolution Rates now show **1 decimal place** (e.g., 98.3%) for institutional accuracy.
+- [2026-01-28] **Exact Message Sent Clean-up**: Filtered out tool traces and internal logs (NOT LIKE 'Calling %'). The volume now reflects actual **Amelia outgoing messages** (~311 vs 1232).
+- [2026-01-28] **Messages Page**: Added discrete conversation count badge to the header.
 

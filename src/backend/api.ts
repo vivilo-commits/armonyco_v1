@@ -492,8 +492,8 @@ class ApiService {
 
     // Automation Rate: (executions without escalation) / total executions
     const automationRate = safeExecutions.length > 0
-      ? Math.round((safeExecutions.filter(e => !e.human_escalation_triggered).length / safeExecutions.length) * 100)
-      : 0;
+      ? ((safeExecutions.filter(e => !e.human_escalation_triggered).length / safeExecutions.length) * 100).toFixed(1)
+      : '0.0';
 
     // --- VALUE SAVED CALCULATION (Summation Logic) ---
     // 1. Human Time Value: Hours saved * Hourly Rate (pro-rated €25/hr)
@@ -517,7 +517,7 @@ class ApiService {
       { label: 'Escalations Resolved', value: String(resolvedEscalations.length) },
       { label: 'Escalations Open', value: String(openEscalations.length) },
       { label: 'Automation Rate', value: `${automationRate}%` },
-      { label: 'Resolution Rate', value: executionsWithHumanIntervention.length > 0 ? `${Math.round((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100)}%` : '0%' },
+      { label: 'Resolution Rate', value: executionsWithHumanIntervention.length > 0 ? `${((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100).toFixed(1)}%` : '0.0%' },
     ];
 
     // Add escalation summary
@@ -525,7 +525,7 @@ class ApiService {
       total: executionsWithHumanIntervention.length,
       open: openEscalations.length,
       resolved: resolvedEscalations.length,
-      resolutionRate: executionsWithHumanIntervention.length > 0 ? Math.round((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100) : 0,
+      resolutionRate: executionsWithHumanIntervention.length > 0 ? parseFloat(((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100).toFixed(1)) : 0,
       recentResolutions: resolvedEscalations.slice(0, 5).map(e => ({
         id: e.execution_id,
         phone: '', // Phone is not directly in the unified Escalation object yet
@@ -1604,7 +1604,7 @@ class ApiService {
         open: openEscalations.length,
         resolved: resolvedEscalationsCount,
         resolutionRate: allEscalations.length > 0
-          ? Math.round((resolvedEscalationsCount / allEscalations.length) * 100)
+          ? Number(((resolvedEscalationsCount / allEscalations.length) * 100).toFixed(1))
           : 100
       },
       systemHealth: {
