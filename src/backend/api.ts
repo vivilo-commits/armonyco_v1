@@ -260,15 +260,25 @@ class ApiService {
     openEscalationsCount: number;
   }> {
     // Ensure organization_id is set
-    await this.ensureOrganizationId();
+    const orgId = await this.ensureOrganizationId();
+
+    // If no organization ID after retries, return empty data gracefully
+    if (!orgId) {
+      console.warn('[API] ⚠️ No organization ID available after retries - returning empty dashboard');
+      return {
+        kpis: [],
+        events: [],
+        whatsappHistory: [],
+        cashflow: { total_revenue: 0, transaction_count: 0 },
+        openEscalationsCount: 0
+      };
+    }
 
     // Check cache first
-    if (this.organizationId) {
-      const cacheKey = cacheKeys.dashboard(this.organizationId, startDate, endDate);
-      const cached = apiCache.get(cacheKey);
-      if (cached) {
-        return cached as any;
-      }
+    const cacheKey = cacheKeys.dashboard(orgId, startDate, endDate);
+    const cached = apiCache.get(cacheKey);
+    if (cached) {
+      return cached as any;
     }
 
     // Import cashflow aggregation
@@ -415,15 +425,23 @@ class ApiService {
     valueCreated: any[];
   }> {
     // Ensure organization_id is set
-    await this.ensureOrganizationId();
+    const orgId = await this.ensureOrganizationId();
+
+    // If no organization ID after retries, return empty data gracefully
+    if (!orgId) {
+      console.warn('[API] ⚠️ No organization ID available after retries - returning empty growth data');
+      return {
+        kpis: [],
+        wins: [],
+        valueCreated: []
+      };
+    }
 
     // Check cache first
-    if (this.organizationId) {
-      const cacheKey = cacheKeys.growth(this.organizationId, startDate, endDate);
-      const cached = apiCache.get(cacheKey);
-      if (cached) {
-        return cached as any;
-      }
+    const cacheKey = cacheKeys.growth(orgId, startDate, endDate);
+    const cached = apiCache.get(cacheKey);
+    if (cached) {
+      return cached as any;
     }
 
     // Fetch executions using started_at for consistency with Dashboard
