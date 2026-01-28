@@ -60,45 +60,64 @@ export const ExecutionDetailModal: React.FC<ExecutionDetailModalProps> = ({
             </h5>
           </div>
           <div className="space-y-3">
-            {[
-              {
-                step: 'Workflow Initiation',
-                desc: `Started ${event.type} protocol`,
-                time: '0ms',
-              },
-              {
-                step: 'Governance Check',
-                desc: `Verdict: ${event.verdict || 'PENDING'}`,
-                time: '120ms',
-              },
-              {
-                step: 'Agent Context',
-                desc: `Operating as ${event.agent || 'Amelia-v4'}`,
-                time: '450ms',
-              },
-              ...(event.messages_sent ? [{
-                step: 'Communication',
-                desc: `Sent ${event.messages_sent} message(s) via WhatsApp`,
-                time: '210ms',
-              }] : []),
-            ].map((step, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-4 bg-stone-50/50 p-4 rounded-xl border border-stone-100 group hover:border-gold-start/30 transition-all"
-              >
-                <div className="w-6 h-6 rounded-full bg-white border border-stone-200 flex items-center justify-center text-[10px] font-bold text-stone-400 shadow-sm">
-                  {i + 1}
+            {(() => {
+              // Calculate estimated step timings based on real duration
+              const totalDuration = event.duration || '0s';
+              const durationMs = totalDuration.includes('s')
+                ? parseFloat(totalDuration) * 1000
+                : parseFloat(totalDuration);
+
+              // Proportional timing estimates (total should equal 100%)
+              const initTime = Math.round(durationMs * 0.05); // 5%
+              const governanceTime = Math.round(durationMs * 0.15); // 15%
+              const contextTime = Math.round(durationMs * 0.35); // 35%
+              const commTime = Math.round(durationMs * 0.45); // 45%
+
+              const formatTime = (ms: number) => {
+                if (ms < 1000) return `${ms}ms`;
+                return `${(ms / 1000).toFixed(1)}s`;
+              };
+
+              return [
+                {
+                  step: 'Workflow Initiation',
+                  desc: `Started ${event.type} protocol`,
+                  time: formatTime(initTime),
+                },
+                {
+                  step: 'Governance Check',
+                  desc: `Verdict: ${event.verdict || 'PENDING'}`,
+                  time: formatTime(governanceTime),
+                },
+                {
+                  step: 'Agent Context',
+                  desc: `Operating as ${event.agent || 'System'}`,
+                  time: formatTime(contextTime),
+                },
+                ...(event.messages_sent ? [{
+                  step: 'Communication',
+                  desc: `Sent ${event.messages_sent} message(s) via WhatsApp`,
+                  time: formatTime(commTime),
+                }] : []),
+              ].map((step, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 bg-stone-50/50 p-4 rounded-xl border border-stone-100 group hover:border-gold-start/30 transition-all"
+                >
+                  <div className="w-6 h-6 rounded-full bg-white border border-stone-200 flex items-center justify-center text-[10px] font-bold text-stone-400 shadow-sm">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-xs font-bold text-stone-900">{step.step}</div>
+                    <p className="text-[10px] text-stone-500 mt-0.5">{step.desc}</p>
+                  </div>
+                  <div className="text-[10px] font-mono text-stone-300 group-hover:text-gold-start transition-colors">
+                    {step.time}
+                  </div>
+                  <ChevronRight size={14} className="text-stone-300" />
                 </div>
-                <div className="flex-1">
-                  <div className="text-xs font-bold text-stone-900">{step.step}</div>
-                  <p className="text-[10px] text-stone-500 mt-0.5">{step.desc}</p>
-                </div>
-                <div className="text-[10px] font-mono text-stone-300 group-hover:text-gold-start transition-colors">
-                  {step.time}
-                </div>
-                <ChevronRight size={14} className="text-stone-300" />
-              </div>
-            ))}
+              ));
+            })()}
           </div>
         </div>
 
