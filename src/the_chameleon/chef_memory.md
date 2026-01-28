@@ -44,3 +44,12 @@ This document serves as the institutional memory for the Armonyco project. It re
 - [2026-01-28] **Key Design**: Fail fast, fail gracefully - never show error screen to user on auth timing issues
 - [2026-01-28] **Key Files**: `api.ts` (ensureOrganizationId, getDashboardData, getGrowthData), `usePageData.ts` (ready param)
 
+### Sentinel-Level Auth Fix & KPI Refinement (Phase 4)
+- [2026-01-28] **API Singleton as Single Source of Truth**: API methods handle auth waiting internally via `ensureOrganizationId()`. Pages no longer need to check `organizationId` before fetching.
+- [2026-01-28] **KPI Differentiation**: 
+  - Decision Latency = P50 (median) execution time
+  - Average Runtime = arithmetic mean execution time
+  - Automation Rate now shows 1 decimal (xx.x%)
+- [2026-01-28] **Lint Cleanup**: Removed unused `organizationId` and `useAuth` imports from Dashboard, Growth, Escalations, Controls, and Settings pages.
+- [2026-01-28] **Messages Page**: Added discrete conversation count badge next to "Protocol Executions" header.
+
