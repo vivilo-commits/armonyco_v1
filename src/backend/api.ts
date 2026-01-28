@@ -69,37 +69,75 @@ class ApiService {
     }
 
     this.recoveryPromise = (async () => {
-      console.log('[API] 🔄 organizationId is null, attempting recovery...');
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.warn('[API] ⚠️ No authenticated user found during recovery');
+      console.log('[API] 🔄 organizationId is null, attempting recovery with retry...');
+
+      // Retry with exponential backoff - wait for auth to complete
+      const MAX_RETRIES = 5;
+      const INITIAL_DELAY = 200; // Start with 200ms
+
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+
+          if (!user) {
+            // Auth might still be initializing, wait and retry
+            if (attempt < MAX_RETRIES - 1) {
+              const delay = INITIAL_DELAY * Math.pow(2, attempt); // 200, 400, 800, 1600, 3200
+              console.log(`[API] ⏳ No user yet (attempt ${attempt + 1}/${MAX_RETRIES}), waiting ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+            console.warn('[API] ⚠️ No authenticated user found after all retries');
+            return null;
+          }
+
+          const { data: membership, error } = await supabase
+            .from('organization_members')
+            .select('organization_id')
+            .eq('user_id', user.id)
+            .single();
+
+          if (error) {
+            console.error('[API] ❌ Membership fetch error:', error);
+            // Could be RLS timing issue, retry
+            if (attempt < MAX_RETRIES - 1) {
+              const delay = INITIAL_DELAY * Math.pow(2, attempt);
+              console.log(`[API] ⏳ Retrying membership fetch (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+              continue;
+            }
+          }
+
+          if (membership?.organization_id) {
+            console.log('[API] ✅ Recovered organization_id from session:', membership.organization_id);
+            this.setOrganizationId(membership.organization_id);
+            return membership.organization_id;
+          }
+
+          console.warn('[API] ⚠️ User has no organization membership');
           return null;
+        } catch (error) {
+          console.error(`[API] ❌ Recovery attempt ${attempt + 1} failed:`, error);
+          if (attempt < MAX_RETRIES - 1) {
+            const delay = INITIAL_DELAY * Math.pow(2, attempt);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
         }
-
-        const { data: membership } = await supabase
-          .from('organization_members')
-          .select('organization_id')
-          .eq('user_id', user.id)
-          .single();
-
-        if (membership?.organization_id) {
-          console.log('[API] ✅ Recovered organization_id from session:', membership.organization_id);
-          this.setOrganizationId(membership.organization_id);
-          return membership.organization_id;
-        }
-
-        console.warn('[API] ⚠️ User has no organization membership');
-        return null;
-      } catch (error) {
-        console.error('[API] ❌ Failed to recover organization_id:', error);
-        return null;
-      } finally {
-        this.recoveryPromise = null;
       }
-    })();
+
+      console.error('[API] ❌ Failed to recover organization_id after all retries');
+      return null;
+    })().finally(() => {
+      // Always reset recovery promise when done so it can be retried
+      this.recoveryPromise = null;
+    });
 
     return this.recoveryPromise;
+  }
+
+  // Reset recovery state - useful for forcing re-auth
+  resetRecovery() {
+    this.recoveryPromise = null;
   }
 
   /**
