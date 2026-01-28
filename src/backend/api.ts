@@ -373,7 +373,9 @@ class ApiService {
     }
 
     // Filter by type = 'ai' to exclude tool traces and human messages
-    messageQuery = messageQuery.eq('message->>type', 'ai');
+    messageQuery = messageQuery
+      .eq('message->>type', 'ai')
+      .not('message->>content', 'like', 'Calling %');
 
     if (startDate) {
       messageQuery = messageQuery.gte('created_at', startDate);
