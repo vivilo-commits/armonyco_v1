@@ -34,7 +34,7 @@ export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
       totalOpen: openRes.length,
       totalResolved: resolvedRes.length
     };
-  }, !!organizationId);
+  });
 
   const filteredEscalations = React.useMemo(() => {
     const dataSource = activeSegment === 'OPEN' ? data?.open : data?.resolved;

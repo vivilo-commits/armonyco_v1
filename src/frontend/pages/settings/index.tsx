@@ -60,7 +60,7 @@ interface TeamMember {
 export const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('IDENTITY');
   const { profile, organization, entitlements, membership, canEdit, canEditSettings, canManageTeam, canEditGeneralSettings, refreshProfile, organizationId } = useAuth();
-  const { loading, error, retry } = usePageData(() => api.getSettingsData(), !!organizationId);
+  const { loading, error, retry } = usePageData(() => api.getSettingsData());
 
   // Tabs that managers cannot edit
   const readOnlyTabs: SettingsTab[] = canEditSettings ? [] : ['IDENTITY', 'ORGANIZATION', 'PROPERTIES', 'SYSTEM_ACTIVATION', 'SUBSCRIPTION'];

@@ -57,8 +57,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
     wins: any[];
     valueCreated: any[];
   }>(
-    () => api.getGrowthData(dateRange.start, dateRange.end),
-    !!organizationId // Only fetch when org ID is available
+    () => api.getGrowthData(dateRange.start, dateRange.end)
   );
 
   React.useEffect(() => {

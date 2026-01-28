@@ -35,12 +35,12 @@ This document serves as the institutional memory for the Armonyco project. It re
 - [2026-01-29] **Centralized Heuristics**: Established LARA_TEMPLATE_SECONDS_INTERVAL = 40 as the authoritative constant for orchestration-to-template conversion.
 
 ### Auth-Gated Data Fetching (Phase 3.5 Hotfix)
-- [2026-01-28] **Race Condition Root Cause**: Infinite loading ("Orchestrating Truth...") was caused by pages fetching data before `organizationId` was set by AuthContext. SessionStorage persistence and `ready` param helped but didn't fully resolve timing issues.
-- [2026-01-28] **Solution Pattern V2 - Exponential Backoff**: Modified `ensureOrganizationId()` in `api.ts` to use retry mechanism with exponential backoff (5 retries, 200-3200ms delays). This waits for Supabase auth to fully initialize before attempting to fetch organization membership.
-- [2026-01-28] **Implementation**: 
-  1. `usePageData` hook accepts `ready` parameter - gating data fetching
-  2. All protected pages pass `!!organizationId` as ready state  
-  3. `ensureOrganizationId()` now retries with backoff if auth isn't ready
-  4. Added `.finally()` to reset recovery promise after completion
-- [2026-01-28] **Key Files**: `api.ts` (ensureOrganizationId with retry), `usePageData.ts` (ready param), all page components (organizationId gating).
+- [2026-01-28] **Race Condition Root Cause**: Infinite loading ("Orchestrating Truth...") caused by pages fetching before `organizationId` set by AuthContext.
+- [2026-01-28] **Solution Pattern V3 - Fast Retry + Graceful Fallback**:
+  1. `ensureOrganizationId()` uses fast retry (3 attempts, 100ms initial delay → ~0.7s total)
+  2. If org ID unavailable after retries, API methods return empty data instead of failing
+  3. `usePageData` hook waits for `ready` state (organizationId availability) before fetching
+  4. SessionStorage persists org ID for soft refresh survival
+- [2026-01-28] **Key Design**: Fail fast, fail gracefully - never show error screen to user on auth timing issues
+- [2026-01-28] **Key Files**: `api.ts` (ensureOrganizationId, getDashboardData, getGrowthData), `usePageData.ts` (ready param)
 

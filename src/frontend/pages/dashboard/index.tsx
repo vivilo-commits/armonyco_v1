@@ -63,10 +63,10 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
   }, [period, customStart, customEnd]);
 
   const { data, loading, error, retry } = usePageData(
-    () => api.getDashboardData(dateRange.start, dateRange.end),
-    !!organizationId // Only fetch when org ID is available
+    () => api.getDashboardData(dateRange.start, dateRange.end)
   );
 
+  // Refetch when period changes
   React.useEffect(() => {
     retry();
   }, [period, retry]);

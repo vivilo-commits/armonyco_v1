@@ -55,7 +55,7 @@ export const Controls: React.FC<ControlsProps> = () => {
         selfCorrection: boolean;
         engines: ControlEngine[];
         addons: ControlAddon[];
-    }>(() => api.getControlsData(), !!organizationId);
+    }>(() => api.getControlsData());
 
     const [toneOfVoice, setToneOfVoice] = React.useState('');
     const [formalityLevel, setFormalityLevel] = React.useState('');
