@@ -184,9 +184,16 @@ export const MessageLog: React.FC<MessageLogProps> = ({ searchTerm }) => {
                 <h2 className="text-sm font-black text-stone-900 tracking-tighter uppercase">
                   Messages
                 </h2>
-                <p className="text-[10px] font-bold text-stone-400 mt-0.5 uppercase tracking-widest">
-                  Protocol Executions
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest">
+                    Protocol Executions
+                  </p>
+                  {data?.conversations && data.conversations.length > 0 && (
+                    <span className="text-[9px] font-mono text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
+                      {data.conversations.length}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -33,7 +33,7 @@ export function calculateDashboardKPIs(
     const successCount = finishedExecutions.filter((e) => e.status === 'success' || e.finished).length;
     const failedCount = finishedExecutions.filter((e) => e.status === 'failed' || e.status === 'error').length;
 
-    const successRate = totalCount > 0 ? Math.round((successCount / totalCount) * 100) : 100;
+    const successRate = totalCount > 0 ? ((successCount / totalCount) * 100).toFixed(1) : '100.0';
     const failureRate = totalCount > 0 ? ((failedCount / totalCount) * 100).toFixed(1) : '0.0';
 
     // Governed Value comes from cashflow_summary if available
@@ -60,6 +60,11 @@ export function calculateDashboardKPIs(
 
     const p50 = latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.5)] : 0;
     const medianTime = p50 > 0 ? (p50 / 1000).toFixed(1) + 's' : '--';
+
+    // Calculate arithmetic mean runtime (different from median/P50)
+    const totalLatency = latencies.reduce((sum, l) => sum + l, 0);
+    const avgRuntimeMs = latencies.length > 0 ? totalLatency / latencies.length : 0;
+    const avgRuntime = avgRuntimeMs > 0 ? (avgRuntimeMs / 1000).toFixed(1) + 's' : '--';
 
     const failedGovernance = finishedExecutions.filter((e) => e.governance_verdict?.toUpperCase() === 'FAILED').length;
     // Decision Integrity = % of decisions that passed governance (100% = perfect, 0% = all failed)
@@ -91,7 +96,7 @@ export function calculateDashboardKPIs(
             trend: 0,
             trendLabel: 'Stable',
             subtext: 'Decisions resolved without human intervention',
-            status: successRate >= 90 ? 'success' : successRate >= 70 ? 'warning' : 'error',
+            status: parseFloat(successRate) >= 90 ? 'success' : parseFloat(successRate) >= 70 ? 'warning' : 'error',
         },
         {
             id: 'open-escalations',
@@ -160,7 +165,7 @@ export function calculateDashboardKPIs(
         {
             id: 'avg-runtime',
             label: 'Average Runtime',
-            value: medianTime,
+            value: avgRuntime,
             trend: 0,
             trendLabel: 'Verified',
             subtext: 'Execution speed',
