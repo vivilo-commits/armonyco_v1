@@ -19,7 +19,7 @@ interface EscalationsProps {
 }
 
 export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
-  const { canResolveEscalations } = useAuth();
+  const { canResolveEscalations, organizationId } = useAuth();
   const [selectedEscalation, setSelectedEscalation] = useState<Escalation | null>(null);
   const [activeSegment, setActiveSegment] = useState<'OPEN' | 'RESOLVED'>('OPEN');
 
@@ -34,7 +34,7 @@ export const Escalations: React.FC<EscalationsProps> = ({ searchTerm }) => {
       totalOpen: openRes.length,
       totalResolved: resolvedRes.length
     };
-  });
+  }, !!organizationId);
 
   const filteredEscalations = React.useMemo(() => {
     const dataSource = activeSegment === 'OPEN' ? data?.open : data?.resolved;

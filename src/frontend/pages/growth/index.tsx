@@ -1,5 +1,7 @@
 import React from 'react';
 import { Target } from 'lucide-react';
+import { KPIExplanationModal } from '@/frontend/components/modals/KPIExplanationModal';
+import { KPI } from '@/backend/types';
 
 import {
   AppPage,
@@ -15,15 +17,18 @@ import {
 
 import { api } from '@/backend/api';
 import { usePageData } from '@/frontend/hooks/usePageData';
+import { useAuth } from '@/frontend/contexts/AuthContext';
 
 interface GrowthProps {
   searchTerm?: string;
 }
 
 export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
+  const { organizationId } = useAuth();
   const [period, setPeriod] = React.useState('all');
   const [customStart, setCustomStart] = React.useState('');
   const [customEnd, setCustomEnd] = React.useState('');
+  const [explainingKPI, setExplainingKPI] = React.useState<KPI | null>(null);
 
   const dateRange = React.useMemo(() => {
     if (period === 'all') return { start: undefined, end: undefined };
@@ -47,8 +52,13 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
     };
   }, [period, customStart, customEnd]);
 
-  const { data, loading, error, retry } = usePageData(() =>
-    api.getGrowthData(dateRange.start, dateRange.end)
+  const { data, loading, error, retry } = usePageData<{
+    kpis: KPI[];
+    wins: any[];
+    valueCreated: any[];
+  }>(
+    () => api.getGrowthData(dateRange.start, dateRange.end),
+    !!organizationId // Only fetch when org ID is available
   );
 
   React.useEffect(() => {
@@ -93,6 +103,7 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
       loading={loading}
       error={error}
       onRetry={retry}
+      onRefresh={retry}
       actions={
         <div className="flex gap-4 items-center">
           <div className="flex bg-stone-100 p-1 rounded-xl">
@@ -132,14 +143,6 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
               />
             </div>
           )}
-
-          <AppButton
-            variant="primary"
-            icon={<Target size={16} />}
-            onClick={() => retry()}
-          >
-            Refresh Data
-          </AppButton>
         </div >
       }
     >
@@ -153,6 +156,15 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
             {/* Primary Metric Highlight */}
             <AppKPICard
               variant="gold"
+              onClick={() => setExplainingKPI({
+                id: 'total-revenue',
+                label: 'Revenue Governed',
+                value: financialMetrics?.totalRevenue || '€ 0,00',
+                subtext: data?.wins?.length ? `${data.wins.length} Wins` : 'Awaiting Verification',
+                status: 'neutral',
+                trend: 0,
+                trendLabel: ''
+              })}
               kpi={{
                 id: `v-cap-primary`,
                 label: 'Revenue Governed',
@@ -173,6 +185,15 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
               <AppKPICard
                 key={i}
                 variant="light"
+                onClick={() => setExplainingKPI({
+                  id: `v-cap-${i + 1}`,
+                  label: item.label,
+                  value: item.value,
+                  subtext: item.sub,
+                  status: 'neutral',
+                  trend: 0,
+                  trendLabel: ''
+                })}
                 kpi={{
                   id: `v-cap-${i + 1}`,
                   label: item.label,
@@ -195,26 +216,31 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {(data?.valueCreated || [
               { label: 'Value Saved', value: '€ 0,00' },
-              { label: 'Human Load Removed', value: '0h' },
+              { label: 'Human Load Removed (per op)', value: '0 min' },
+              { label: 'Hours Saved', value: '0h' },
               { label: 'Escalations Resolved', value: '0' },
               { label: 'Escalations Open', value: '0' },
               { label: 'Operational Autonomy', value: '0%' },
               { label: 'Resolution Rate', value: '0%' },
-            ]).map((item: any, i: number) => (
-              <AppKPICard
-                key={i}
-                variant={i === 0 ? 'gold' : 'light'}
-                kpi={{
-                  id: `v-cre-${i}`,
-                  label: item.label,
-                  value: item.value,
-                  subtext: i === 0 ? 'Institutional Savings' : '',
-                  trend: 0,
-                  trendLabel: '',
-                  status: 'neutral',
-                }}
-              />
-            ))}
+            ]).map((item: any, i: number) => {
+              const kpi = {
+                id: i === 1 ? 'human-load-removed' : i === 2 ? 'hours-saved' : i === 3 ? 'escalations-resolved' : i === 4 ? 'open-escalations' : i === 5 ? 'ai-resolution' : `v-cre-${i}`,
+                label: item.label,
+                value: item.value,
+                subtext: i === 0 ? 'Institutional Savings' : '',
+                trend: 0,
+                trendLabel: '',
+                status: 'neutral' as const,
+              };
+              return (
+                <AppKPICard
+                  key={i}
+                  variant={i === 0 ? 'gold' : 'light'}
+                  onClick={() => setExplainingKPI(kpi)}
+                  kpi={kpi}
+                />
+              );
+            })}
           </div>
         </AppSection>
 
@@ -273,6 +299,12 @@ export const Growth: React.FC<GrowthProps> = ({ searchTerm }) => {
           </div>
         </AppSection>
       </div>
+
+      <KPIExplanationModal
+        isOpen={!!explainingKPI}
+        onClose={() => setExplainingKPI(null)}
+        kpi={explainingKPI}
+      />
     </AppPage >
   );
 };

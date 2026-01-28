@@ -87,6 +87,11 @@ export const AppPage: React.FC<AppPageProps> = ({
             <div className="text-stone-400 font-bold tracking-[0.3em] text-[10px] uppercase">
               Orchestrating Truth...
             </div>
+            <div className="mt-8 p-4 bg-stone-50 border border-stone-100 border-dashed rounded-xl max-w-xs text-center animate-in fade-in slide-in-from-bottom-2 duration-1000 delay-5000" style={{ animationDelay: '5s', animationFillMode: 'backwards' }}>
+              <p className="text-[9px] text-stone-400 font-medium leading-relaxed">
+                If the orchestration persists, a <strong className="text-stone-600">Force Sync (Ctrl+Shift+R)</strong> may be required to clear potential state residue.
+              </p>
+            </div>
           </div>
         ) : error ? (
           <div className="bg-red-50 p-16 rounded-[2.5rem] border border-red-200 text-center shadow-card">

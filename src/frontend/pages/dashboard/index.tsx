@@ -23,11 +23,14 @@ import { ExecutionDetailModal } from '@/frontend/components/modals/ExecutionDeta
 import { ConfigurePMSModal } from '@/frontend/components/modals/ConfigurePMSModal';
 import { GovernanceAuditModal } from '@/frontend/components/modals/GovernanceAuditModal';
 import { Building2 } from 'lucide-react';
+import { KPIExplanationModal } from '@/frontend/components/modals/KPIExplanationModal';
+import { useAuth } from '@/frontend/contexts/AuthContext';
 
 const INITIAL_VISIBLE_COUNT = 20;
 const LOAD_MORE_COUNT = 20;
 
 export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => {
+  const { organizationId } = useAuth();
   const [period, setPeriod] = React.useState('all');
   const [customStart, setCustomStart] = React.useState('');
   const [customEnd, setCustomEnd] = React.useState('');
@@ -59,8 +62,9 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
     };
   }, [period, customStart, customEnd]);
 
-  const { data, loading, error, retry } = usePageData(() =>
-    api.getDashboardData(dateRange.start, dateRange.end)
+  const { data, loading, error, retry } = usePageData(
+    () => api.getDashboardData(dateRange.start, dateRange.end),
+    !!organizationId // Only fetch when org ID is available
   );
 
   React.useEffect(() => {
@@ -70,6 +74,7 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
   const [selectedEvent, setSelectedEvent] = React.useState<ExecutionEvent | null>(null);
   const [isPMSModalOpen, setIsPMSModalOpen] = React.useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = React.useState(false);
+  const [explainingKPI, setExplainingKPI] = React.useState<KPI | null>(null);
 
   const filteredEvents = React.useMemo(() => {
     if (!data?.events) return [];
@@ -180,12 +185,6 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
             >
               Governance Audit
             </AppButton>
-            <AppBadge
-              variant="success"
-              icon={<div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
-            >
-              Operating Autonomously
-            </AppBadge>
           </div>
         </div>
       }
@@ -205,10 +204,19 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
                 {data?.kpis && data.kpis.length > 0 ? (
                   <>
                     {data.kpis.slice(0, 1).map((kpi, index) => (
-                      <AppKPICard key={index} kpi={kpi} variant="gold" />
+                      <AppKPICard
+                        key={index}
+                        kpi={kpi}
+                        variant="gold"
+                        onClick={() => setExplainingKPI(kpi)}
+                      />
                     ))}
                     {data.kpis.slice(1, 6).map((kpi, index) => (
-                      <AppKPICard key={index} kpi={kpi} />
+                      <AppKPICard
+                        key={index}
+                        kpi={kpi}
+                        onClick={() => setExplainingKPI(kpi)}
+                      />
                     ))}
                   </>
                 ) : (
@@ -246,7 +254,11 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
               >
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
                   {data?.kpis.slice(6, 12).map((kpi: KPI, index: number) => (
-                    <AppKPICard key={index} kpi={kpi} />
+                    <AppKPICard
+                      key={index}
+                      kpi={kpi}
+                      onClick={() => setExplainingKPI(kpi)}
+                    />
                   ))}
                 </div>
               </AppSection>
@@ -357,6 +369,12 @@ export const Dashboard: React.FC<{ searchTerm?: string }> = ({ searchTerm }) => 
       <GovernanceAuditModal
         isOpen={isAuditModalOpen}
         onClose={() => setIsAuditModalOpen(false)}
+      />
+
+      <KPIExplanationModal
+        isOpen={!!explainingKPI}
+        onClose={() => setExplainingKPI(null)}
+        kpi={explainingKPI}
       />
     </AppPage>
   );

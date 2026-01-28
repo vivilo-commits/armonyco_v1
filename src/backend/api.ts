@@ -9,7 +9,8 @@ import type {
   WhatsAppHistory,
   CashflowSummary,
   Conversation,
-  CreditTransaction
+  CreditTransaction,
+  KPI
 } from './types';
 import {
   calculateDashboardKPIs,
@@ -31,10 +32,27 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 class ApiService {
   private organizationId: string | null = null;
+  private recoveryPromise: Promise<string | null> | null = null;
+  private static ORG_ID_KEY = 'armonyco_org_id';
+
+  constructor() {
+    // Restore orgId from sessionStorage on init (survives soft refresh)
+    const storedOrgId = sessionStorage.getItem(ApiService.ORG_ID_KEY);
+    if (storedOrgId) {
+      this.organizationId = storedOrgId;
+      console.log('[API] ✅ Restored organizationId from session:', storedOrgId);
+    }
+  }
 
   setOrganizationId(id: string | null) {
     this.organizationId = id;
     console.log('[API] Organization ID set:', id);
+    // Persist to sessionStorage for soft refresh survival
+    if (id) {
+      sessionStorage.setItem(ApiService.ORG_ID_KEY, id);
+    } else {
+      sessionStorage.removeItem(ApiService.ORG_ID_KEY);
+    }
   }
 
   getOrganizationId(): string | null {
@@ -46,34 +64,42 @@ class ApiService {
       return this.organizationId;
     }
 
-    console.log('[API] 🔄 organizationId is null, attempting recovery...');
-
-    // Try to fetch from current user's membership
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        console.warn('[API] ⚠️ No authenticated user found during recovery');
-        return null;
-      }
-
-      const { data: membership } = await supabase
-        .from('organization_members')
-        .select('organization_id')
-        .eq('user_id', user.id)
-        .single();
-
-      if (membership?.organization_id) {
-        console.log('[API] ✅ Recovered organization_id from session:', membership.organization_id);
-        this.setOrganizationId(membership.organization_id);
-        return membership.organization_id;
-      }
-
-      console.warn('[API] ⚠️ User has no organization membership');
-      return null;
-    } catch (error) {
-      console.error('[API] ❌ Failed to recover organization_id:', error);
-      return null;
+    if (this.recoveryPromise) {
+      return this.recoveryPromise;
     }
+
+    this.recoveryPromise = (async () => {
+      console.log('[API] 🔄 organizationId is null, attempting recovery...');
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.warn('[API] ⚠️ No authenticated user found during recovery');
+          return null;
+        }
+
+        const { data: membership } = await supabase
+          .from('organization_members')
+          .select('organization_id')
+          .eq('user_id', user.id)
+          .single();
+
+        if (membership?.organization_id) {
+          console.log('[API] ✅ Recovered organization_id from session:', membership.organization_id);
+          this.setOrganizationId(membership.organization_id);
+          return membership.organization_id;
+        }
+
+        console.warn('[API] ⚠️ User has no organization membership');
+        return null;
+      } catch (error) {
+        console.error('[API] ❌ Failed to recover organization_id:', error);
+        return null;
+      } finally {
+        this.recoveryPromise = null;
+      }
+    })();
+
+    return this.recoveryPromise;
   }
 
   /**
@@ -188,7 +214,13 @@ class ApiService {
   // --- Dashboard Data ---
 
 
-  async getDashboardData(startDate?: string, endDate?: string) {
+  async getDashboardData(startDate?: string, endDate?: string): Promise<{
+    kpis: KPI[];
+    events: ExecutionEvent[];
+    whatsappHistory: WhatsAppHistory[];
+    cashflow: any;
+    openEscalationsCount: number;
+  }> {
     // Ensure organization_id is set
     await this.ensureOrganizationId();
 
@@ -197,7 +229,7 @@ class ApiService {
       const cacheKey = cacheKeys.dashboard(this.organizationId, startDate, endDate);
       const cached = apiCache.get(cacheKey);
       if (cached) {
-        return cached;
+        return cached as any;
       }
     }
 
@@ -339,7 +371,11 @@ class ApiService {
 
   // --- Growth Data ---
 
-  async getGrowthData(startDate?: string, endDate?: string) {
+  async getGrowthData(startDate?: string, endDate?: string): Promise<{
+    kpis: KPI[];
+    wins: any[];
+    valueCreated: any[];
+  }> {
     // Ensure organization_id is set
     await this.ensureOrganizationId();
 
@@ -348,7 +384,7 @@ class ApiService {
       const cacheKey = cacheKeys.growth(this.organizationId, startDate, endDate);
       const cached = apiCache.get(cacheKey);
       if (cached) {
-        return cached;
+        return cached as any;
       }
     }
 
@@ -366,31 +402,26 @@ class ApiService {
       limit: 1000,
     });
 
-    // Calculate escalation metrics from executions.escalation_status (NOT escalations table which is empty)
+    // Fetching escalations from the unified source to ensure consistency
+    const [openEscs, allEscs] = await Promise.all([
+      this.getEscalationsData('OPEN', startDate, endDate),
+      this.getEscalationsData('ALL', startDate, endDate),
+    ]);
+
     const safeExecutions = executions || [];
-    const executionsWithHumanIntervention = safeExecutions.filter(e =>
-      e.human_escalation_triggered === true
-    );
-    const resolvedEscalations = executionsWithHumanIntervention.filter(e =>
-      e.escalation_status === 'RESOLVED'
-    );
-    const openEscalations = executionsWithHumanIntervention.filter(e =>
-      e.escalation_status !== 'RESOLVED'
-    );
+    const executionsWithHumanIntervention = allEscs;
+    const resolvedEscalations = allEscs.filter(e => e.status === 'RESOLVED');
+    const openEscalations = openEscs;
 
     // Calculate KPIs using both sources (cashflow is primary while executions is empty)
     const kpis = calculateGrowthKPIs(executions || [], cashflowTransactions || []);
 
-    // Build wins from transactions above €500
+    // Build wins from transactions - removed the restricted €500 filter to show more truth
     const wins = (cashflowTransactions || [])
-      .filter((tx) => {
-        const amount = parseCurrency(tx.total_amount);
-        return amount >= 500;
-      })
       .slice(0, 10)
       .map((tx) => ({
         id: tx.code || tx.id.slice(0, 8),
-        title: `${tx.guest} - ${tx.code}`,
+        title: `${tx.guest} - ${tx.code || 'Institutional'}`,
         value: tx.total_amount,
         date: tx.collection_date || new Date(tx.created_at).toLocaleDateString(),
         status: 'Captured' as 'Approved' | 'Captured' | 'Verified',
@@ -436,10 +467,10 @@ class ApiService {
       resolutionRate: executionsWithHumanIntervention.length > 0 ? Math.round((resolvedEscalations.length / executionsWithHumanIntervention.length) * 100) : 0,
       recentResolutions: resolvedEscalations.slice(0, 5).map(e => ({
         id: e.execution_id,
-        phone: e.workflow_output?.phone || '',
-        reason: e.human_escalation_reason || '',
-        resolvedAt: e.updated_at,
-        resolvedBy: e.workflow_output?.resolved_by || '',
+        phone: '', // Phone is not directly in the unified Escalation object yet
+        reason: e.reason || '',
+        resolvedAt: e.resolved_at || e.updated_at,
+        resolvedBy: e.resolved_by_name || 'System',
       })),
     };
 
@@ -704,7 +735,7 @@ class ApiService {
       const cacheKey = cacheKeys.escalations(this.organizationId, status, startDate, endDate);
       const cached = apiCache.get(cacheKey);
       if (cached) {
-        return cached;
+        return cached as any;
       }
     }
 

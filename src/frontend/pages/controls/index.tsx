@@ -38,7 +38,7 @@ interface ControlsProps {
 }
 
 export const Controls: React.FC<ControlsProps> = () => {
-    const { canEdit } = useAuth();
+    const { canEdit, organizationId } = useAuth();
     const [showSaveModal, setShowSaveModal] = React.useState(false);
     const { data, loading, error, retry } = usePageData<{
         toneOfVoice: string;
@@ -55,12 +55,10 @@ export const Controls: React.FC<ControlsProps> = () => {
         selfCorrection: boolean;
         engines: ControlEngine[];
         addons: ControlAddon[];
-    }>(() => api.getControlsData());
+    }>(() => api.getControlsData(), !!organizationId);
 
     const [toneOfVoice, setToneOfVoice] = React.useState('');
-    const [languages, setLanguages] = React.useState<string[]>([]);
     const [formalityLevel, setFormalityLevel] = React.useState('');
-    const [brandKeywords, setBrandKeywords] = React.useState('');
 
     const [enableShadowMode, setEnableShadowMode] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
@@ -87,18 +85,14 @@ export const Controls: React.FC<ControlsProps> = () => {
     React.useEffect(() => {
         if (data) {
             setToneOfVoice(data.toneOfVoice || 'Professional & Warm');
-            setLanguages(data.languages || ['English']);
             setFormalityLevel(data.formalityLevel || 'High');
-            setBrandKeywords(data.brandKeywords || '');
             setEnableShadowMode(data.enableShadowMode);
         }
     }, [data]);
 
     const hasChanges = data && (
         toneOfVoice !== (data.toneOfVoice || 'Professional & Warm') ||
-        JSON.stringify(languages) !== JSON.stringify(data.languages || ['English']) ||
         formalityLevel !== (data.formalityLevel || 'High') ||
-        brandKeywords !== (data.brandKeywords || '') ||
         enableShadowMode !== data.enableShadowMode
     );
 
@@ -107,9 +101,8 @@ export const Controls: React.FC<ControlsProps> = () => {
         try {
             await api.updateGeneralSettings({
                 tone_of_voice: toneOfVoice,
-                languages: languages,
+                languages: ['English'], // Locked to English
                 formality_level: formalityLevel,
-                brand_keywords: brandKeywords,
                 enable_shadow_mode: enableShadowMode,
                 // These are core features, should arguably always be true if the user tried to change them
                 enable_multi_language: true,
@@ -151,11 +144,11 @@ export const Controls: React.FC<ControlsProps> = () => {
     }, [allProducts, productSearch, selectedCategory, activeTab]);
 
     const INTELLIGENCE_LEVELS = [
-        { label: 'Guided', value: 'Standard', desc: 'Predictable workflows with high control.' },
-        { label: 'Contextual', value: 'Advanced', desc: 'Situational awareness for complex guests.' },
-        { label: 'Autonomous', value: 'Pro', desc: 'Independent decision making & logic execution.' },
+        { label: 'Tactical', value: 'Standard', desc: 'Predictable workflows with high control.' },
+        { label: 'Analytical', value: 'Advanced', desc: 'Situational awareness for complex guests.' },
+        { label: 'Strategic', value: 'Pro', desc: 'Independent decision making & logic execution.' },
         { label: 'Elite', value: 'Elite', desc: 'Advanced reasoning and multi-step orchestration.' },
-        { label: 'Max', value: 'Max', desc: 'Maximum cognitive depth for institutional scale.' }
+        { label: 'Sovereign', value: 'Max', desc: 'Maximum cognitive depth for institutional scale.' }
     ];
 
 
@@ -237,25 +230,19 @@ export const Controls: React.FC<ControlsProps> = () => {
                                 </div>
 
                                 <div className="lg:col-span-5 lg:border-l lg:border-r border-stone-100 lg:px-12">
-                                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.2em] mb-6">Execution Languages</h4>
+                                    <h4 className="text-[10px] font-bold text-stone-400 uppercase tracking-[0.2em] mb-6">App Language</h4>
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                         {['English', 'Italian', 'Spanish', 'French', 'German', 'Portuguese'].map(lang => {
-                                            const isActive = languages.includes(lang);
+                                            const isActive = lang === 'English';
                                             return (
                                                 <button
                                                     key={lang}
-                                                    onClick={() => {
-                                                        if (!canEdit) return;
-                                                        const newLangs = isActive
-                                                            ? languages.filter(l => l !== lang)
-                                                            : [...languages, lang];
-                                                        setLanguages(newLangs);
-                                                    }}
+                                                    disabled // Locked
                                                     className={`
-                                                        px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all
+                                                        px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest border transition-all cursor-not-allowed
                                                         ${isActive
                                                             ? 'bg-stone-900 border-stone-900 text-white shadow-premium'
-                                                            : 'bg-white border-stone-100 text-stone-400 hover:border-stone-300'}
+                                                            : 'bg-white border-stone-100 text-stone-200'}
                                                     `}
                                                 >
                                                     {lang}
@@ -263,15 +250,10 @@ export const Controls: React.FC<ControlsProps> = () => {
                                             )
                                         })}
                                     </div>
-                                    <div className="mt-8">
-                                        <FormField
-                                            label="Brand Keywords"
-                                            placeholder="e.g. Premium, Direct, Reliable"
-                                            value={brandKeywords}
-                                            onChange={(e) => setBrandKeywords(e.target.value)}
-                                            disabled={!canEdit}
-                                            className="bg-stone-50/50"
-                                        />
+                                    <div className="mt-8 p-4 bg-stone-50 rounded-xl border border-stone-100 border-dashed">
+                                        <p className="text-[10px] text-stone-400 font-medium leading-relaxed">
+                                            Institutional language is currently locked to <strong className="text-stone-600">English</strong> to ensure maximum governance fidelity during the current orchestration phase. Support for additional localized dialects will be phased in accordance with sovereign security protocols.
+                                        </p>
                                     </div>
                                 </div>
 

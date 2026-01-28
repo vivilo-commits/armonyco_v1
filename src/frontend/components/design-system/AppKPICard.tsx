@@ -11,8 +11,8 @@ export const AppKPICard: React.FC<AppKPICardProps> = ({ kpi, variant = 'dark', o
   if (variant === 'gold') {
     return (
       <div
-        className="relative group overflow-hidden rounded-2xl bg-stone-900 border border-stone-800 p-5 md:p-6 transition-all duration-700 hover:border-gold-start/40 shadow-gold-glow h-full min-h-[120px] flex flex-col justify-center cursor-pointer"
         onClick={onClick}
+        className={`relative group overflow-hidden rounded-2xl bg-stone-900 border border-stone-800 p-5 md:p-6 transition-all duration-700 hover:border-gold-start/40 shadow-gold-glow h-full min-h-[120px] flex flex-col justify-center ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
       >
         {/* Dynamic Background Effect */}
         <div className="absolute top-0 right-0 w-48 h-48 gold-gradient opacity-10 rounded-full blur-[60px] -mr-24 -mt-24 pointer-events-none group-hover:opacity-20 transition-all duration-1000" />
@@ -39,8 +39,8 @@ export const AppKPICard: React.FC<AppKPICardProps> = ({ kpi, variant = 'dark', o
 
   return (
     <div
-      className={`flex flex-col pl-4 border-l border-stone-800 transition-colors group h-full min-h-[120px] py-2 justify-center cursor-pointer ${isDark ? 'hover:border-gold-start/50' : 'hover:border-gold-start/30 border-stone-200'}`}
       onClick={onClick}
+      className={`flex flex-col pl-4 border-l border-stone-800 transition-colors group h-full min-h-[120px] py-2 justify-center ${isDark ? 'hover:border-gold-start/50' : 'hover:border-gold-start/30 border-stone-200'} ${onClick ? 'cursor-pointer active:scale-95' : ''}`}
     >
       <span
         className={`text-[9px] font-bold uppercase tracking-widest transition-colors mb-2 ${isDark ? 'text-stone-500 group-hover:text-[#d4af37]' : 'text-stone-400 group-hover:text-[#d4af37]'}`}

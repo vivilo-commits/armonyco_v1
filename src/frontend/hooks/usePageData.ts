@@ -2,18 +2,23 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '@/backend/api';
 
 // Timeout for API calls - prevents infinite loading
-const API_TIMEOUT_MS = 30000; // 30 seconds - reduced from 40s for faster failure detection
+const API_TIMEOUT_MS = 30000; // 30 seconds
 
-export function usePageData<T>(apiCall: () => Promise<T>) {
+export function usePageData<T>(apiCall: () => Promise<T>, ready: boolean = true) {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const apiCallRef = useRef(apiCall);
+  const readyRef = useRef(ready);
 
-  // Update ref when apiCall changes
+  // Update refs when values change
   useEffect(() => {
     apiCallRef.current = apiCall;
   }, [apiCall]);
+
+  useEffect(() => {
+    readyRef.current = ready;
+  }, [ready]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -48,9 +53,17 @@ export function usePageData<T>(apiCall: () => Promise<T>) {
     }
   }, []);
 
+  // Fetch when ready becomes true
   useEffect(() => {
-    void fetchData();
-  }, [fetchData]);
+    if (ready) {
+      console.log('[usePageData] ✅ Ready, fetching data...');
+      void fetchData();
+    } else {
+      console.log('[usePageData] ⏳ Waiting for ready state...');
+      // Keep loading true while waiting
+      setLoading(true);
+    }
+  }, [ready, fetchData]);
 
   return { data, loading, error, retry: fetchData };
 }

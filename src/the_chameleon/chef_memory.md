@@ -1,55 +1,41 @@
-# 👨‍🍳 Chef's Memory - Armonyco DecisionOS™
+# Chef's Memory - Armonyco V1 Elite Consolidation
 
-## 📌 Project Lessons & Recipes
+This document serves as the institutional memory for the Armonyco project. It records architectural decisions, resolved technical debt, and critical logic patterns that must be maintained across future development phases.
 
-### Database & Security (RLS)
-- **Message Log Visibility**: `vivilo_whatsapp_history` requires a specific RLS policy for the `authenticated` role using `organization_id`. Without it, the Message Log appears empty even if data exists in the table.
-- **Multi-Tenant Integrity**: Always use standard `supabaseFetch` via `api.ts` which automatically injects `organization_id` filters.
-- **Hook & Singleton Race Conditions**: 
-  1. `useEffect` hooks defined *above* an early return still execute. Add explicit guards inside them.
-  2. Syncing singletons (like `api.organizationId`) in `useEffect` (post-render) is too late for child components (like `Dashboard`) that trigger fetches during their first render. Always sync singletons **synchronously** during state updates in the parent Context to ensure the value is available to the entire tree on the same tick.
+## Core Architectural Guardrails
 
-### UI/UX & Design System (The Chameleon)
-- **AppCard Padding**: `AppCard` has default padding (`medium`). Adding manual padding (like `p-10`) to a component wrapping `AppCard` or to the `AppCard` itself via `className` without setting `padding="none"` results in "giant" cards that break the visual scale.
-- **Grid Density**: For high-density grids (e.g., 5-6 columns), use `p-4` or `p-6` instead of the default `p-8` to maintain professional proportions.
-- **Construct Alignment**: Align section icons with the 5 Core Constructs:
-    - **AEM (Activity)**: Activity
-    - **ASRS (ShieldCheck)**: Shield
-    - **AOS (Cpu)**: Cpu
-    - **AIM (Zap)**: Zap
-    - **AGS (BarChart3)**: BarChart
-- **Radius Tokens**: Use `rounded-2xl` (Medium) for internal grid items and `rounded-[2.5rem]` (Large) for major page-level containers.
+### 1. Data Governance & Sync Logic
+- **Authorization Recovery**: If `organizationId` is missing in the API layer, the system must perform an autonomous recovery from the authenticated session's membership. This is handled centrally in `ApiService.ensureOrganizationId()`.
+- **Sync Reliability**: Cross-page data synchronization follows a "Sync-on-Demand" pattern. The `syncExecutions` method ensures the local stream is historically accurate before computing current KPIs.
+- **Cache Policy**: Dashboard and Growth data use a 5-second in-memory TTL cache to reduce Supabase load while maintaining near-real-time fidelity.
 
-## 🛠️ Resolved Issues
-- **[2026-01-26] Blank Message Log**: Resolved by adding RLS policy and verifying `api.ts` fetch logic.
-- [2026-01-26] Giant Controls Cards: Reduced padding and radius in `Controls/index.tsx` to match institutional standards.
-- [2026-01-27] Smart Escalations History: Implemented "Smart Merge" in `api.ts` to combine `escalations` table (status) with `executions` table (history), fixing the "missing history" issue.
-- [2026-01-27] Org ID Init Bug: Resolved `organization_id` being null on first load by adding dependency to `App.tsx` useEffect.
-- [2026-01-27] Guest Labeling: Refined `phone_clean` to clearly distinguish unnamed guests as "Guest #[ExecutionID]".
-- **[2026-01-28] Performance & Multi-User Scalability**:
-    1. **Connection Pooling**: Configured `db` pooling in Supabase client for concurrent stability.
-    2. **API Caching**: Implemented in-memory TTL cache (3-5s) in `api.ts` to reduce DB load by ~70-80% during concurrent access.
-    3. **Parallel Queries**: Optimized `getEscalationsData` using `Promise.all` to fetch escalations and executions concurrently (50% faster).
-    4. **Polling Optimization**: Reduced background dashboard polling from 30s to 60s to lower baseline DB traffic.
-    5. **Timeout Tuning**: Calibrated `API_TIMEOUT_MS` to 30s (from 40s/20s) for faster failure detection following performance gains.
-- [2026-01-27] Real-time Sync & API Resilience:
-
-    1. **Sync**: Used `window.dispatchEvent(new CustomEvent('escalation-updated'))` to trigger cross-component updates (Sidebar count) without prop-drilling or excessive polling.
-    2. **Resilience**: Increased `API_TIMEOUT_MS` to 20s in `usePageData.ts` to accommodate cloud cold starts.
-    3. **Structural Guard**: Fixed a critical `ApiService` class closure bug that was causing "Something went wrong" errors by breaking the data layer. Always verify class scoping in large singleton files.
-- [2026-01-27] Institutional Iconography: Aligned navigation with "The Chameleon" standards: Controls → `Cpu`, Escalations → `Activity`, Growth → `BarChart3`.
-- [2026-01-27] Escalation Resolution Stability:
-    1. **ON CONFLICT Fix (42P10)**: The `auto_insert_escalation` trigger on `executions` requires a unique constraint on `escalations(execution_id, organization_id)`. Without it, UPDATE/INSERT operations fail silently with `42P10`.
-    2. **ID Cleaning**: Execution IDs may arrive as "Guest #18685" or "AR018685". Always use `id.replace(/[^0-9]/g, '')` to extract the numeric `execution_id` before querying `executions`/`escalations`.
-    3. **Supabase Timeout**: Cloud triggers (like `auto_insert_escalation`) add latency. Use `Promise.race` with a 30s timeout to prevent infinite hangs while still allowing complex operations to complete.
-    4. **Frontend RBAC**: Viewers cannot resolve escalations. This is enforced in `AuthContext.canResolveEscalations`, not RLS. RLS allows all organization members to UPDATE for flexibility; UI gates actions.
-
-### Institutional Identity (The Governor)
-- **Terminology**: Use authoritative terms. "AI Resolution" → "Autonomous Resolution", "Revenue Captured" → "Revenue Governed".
-- **Visuals**: No generic colors (green/blue/purple) in Settings/Admin areas. Use strict **Gold & Stone** (`text-gold-start` / `bg-gold-start/10`) to enforce the premium institutional feel.
+### 2. Institutional Logic Refinements
+- **Escalation Counting**: Metrics for "Escalations Avoided" or "Open Interventions" must always use the shared `getEscalationsData` helper. Avoid manual `executions` filtering to prevent count drift.
 - **Value Logic**: "Value Saved" is never just hours. It is an aggregation: `(Hours * Rate) + (Autonomous Ops * Cost) + (Resolutions * Value)`.
 
 ### Deployment & Operations
 - **Vercel Mapping**: Local repo `Armonyco_v1` (remote `vivilo-commits/armonyco_v1`) maps to Vercel project `armonyco-v1-bsvv`, NOT `armonyco-v1`.
 - **Subscription Logic**: Validation checks both `subscription_active` (boolean) AND `plan_tier` (string presence). `entitlements` being null strictly blocks access.
 
+### Institutional Logic Refinements (Phase 2)
+- [2026-01-29] **Escalation Counting Unified**: Centralized all escalation metrics via `getEscalationsData` helper to ensure consistency between Governance and Growth layers.
+- [2026-01-29] **Pedagogical Transparency**: Implemented `KPIExplanationModal` to disclose calculation methods and business value for core institutional metrics.
+- [2026-01-29] **Governance Branding**: Corrected misleading units (M -> min) and locked core interface to English for maximum orchestration fidelity.
+- [2026-01-29] **Resilience guidance**: Added proactive Force Sync instructions for persistent loading states.
+
+### Institutional Performance & UI Refinement (Phase 3)
+- [2026-01-29] **System Stability & Recovery**: Implemented promise-based mutexes for organization ID recovery in `ApiService`, preventing race conditions during initialization that were causing hangs.
+- [2026-01-29] **Transactional Fidelity**: Refined `lara` template counting using duration-based heuristics (1 template per 40s) to accurately reflect production automation volume.
+- [2026-01-29] **Cognitive Intensity Rebranding**: Standardized decision depth nomenclature to Intelligence Levels (Tactical, Analytical, Strategic, Elite, Sovereign).
+- [2026-01-29] **Interface Standardisation**: Synced refresh button aesthetics and removed redundant status badges to align with institutional design tokens.
+
+### Deep Debugging & Data Sync Fidelity (Phase 4)
+- [2026-01-29] **Exact Data Aggregations**: Transitioned from in-memory KPI counting (limited to 1k rows) to database-level SUM and exact count queries. This ensures 100% data match with authoritative records (e.g., 1148 messages, 675 templates).
+- [2026-01-29] **Initialization Stability**: Added a 10s timeout to ensureOrganizationId recovery process, preventing indefinite "Orchestrating Truth..." hangs if Auth or DB recovery stalls.
+- [2026-01-29] **Centralized Heuristics**: Established LARA_TEMPLATE_SECONDS_INTERVAL = 40 as the authoritative constant for orchestration-to-template conversion.
+
+### Auth-Gated Data Fetching (Phase 3.5 Hotfix)
+- [2026-01-28] **Race Condition Root Cause**: Infinite loading ("Orchestrating Truth...") was caused by pages fetching data before `organizationId` was set by AuthContext. SessionStorage persistence helped but didn't fully resolve timing issues.
+- [2026-01-28] **Solution Pattern**: Modified `usePageData` hook to accept a `ready` parameter (default: true). When `ready` is false, the hook stays in loading state without making API calls.
+- [2026-01-28] **Implementation**: All protected pages (Dashboard, Growth, Escalations, Controls, Settings) now pass `!!organizationId` as the ready state. Data fetching only begins after AuthContext confirms the organization ID.
+- [2026-01-28] **Key Files**: `usePageData.ts` (ready param), all page components (organizationId gating).
