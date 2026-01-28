@@ -71,9 +71,9 @@ class ApiService {
     this.recoveryPromise = (async () => {
       console.log('[API] 🔄 organizationId is null, attempting recovery with retry...');
 
-      // Retry with exponential backoff - wait for auth to complete
-      const MAX_RETRIES = 5;
-      const INITIAL_DELAY = 200; // Start with 200ms
+      // Fast retry with shorter backoff - wait for auth to complete
+      const MAX_RETRIES = 3;
+      const INITIAL_DELAY = 100; // Start with 100ms (100, 200, 400 = ~0.7s total)
 
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
