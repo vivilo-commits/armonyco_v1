@@ -372,6 +372,9 @@ class ApiService {
       messageQuery = messageQuery.eq('organization_id', this.organizationId);
     }
 
+    // Filter by type = 'ai' to exclude tool traces and human messages
+    messageQuery = messageQuery.eq('message->>type', 'ai');
+
     if (startDate) {
       messageQuery = messageQuery.gte('created_at', startDate);
     }
