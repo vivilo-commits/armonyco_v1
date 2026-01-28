@@ -154,8 +154,8 @@ const AppContent: React.FC = () => {
 
     window.addEventListener('escalation-updated', handleSync);
 
-    // Refresh every 30 seconds for real-time feel
-    const interval = setInterval(fetchCount, 30000);
+    // Refresh every 60 seconds (reduced from 30s for better performance)
+    const interval = setInterval(fetchCount, 60000);
     return () => {
       window.removeEventListener('escalation-updated', handleSync);
       clearInterval(interval);

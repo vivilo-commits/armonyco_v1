@@ -24,6 +24,7 @@ import {
 import { CashflowTransaction } from './cashflow-api';
 export { parseCurrency, formatCurrency };
 import { supabase } from '@/database/supabase';
+import { apiCache, cacheKeys } from './cache';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -186,9 +187,19 @@ class ApiService {
 
   // --- Dashboard Data ---
 
+
   async getDashboardData(startDate?: string, endDate?: string) {
     // Ensure organization_id is set
     await this.ensureOrganizationId();
+
+    // Check cache first
+    if (this.organizationId) {
+      const cacheKey = cacheKeys.dashboard(this.organizationId, startDate, endDate);
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
 
     // Import cashflow aggregation
     const { getCashflowAggregation, getCashflowForPeriod } = await import('./cashflow-api');
@@ -308,20 +319,38 @@ class ApiService {
       safeOpenEscalations.length
     );
 
-    return {
+    const result = {
       kpis,
       events, // Dashboard expects 'events' as ExecutionEvent[]
       whatsappHistory: safeHistory,
       cashflow: cashflowAgg,
       openEscalationsCount: safeOpenEscalations.length
     };
+
+    // Cache the result for 5 seconds
+    if (this.organizationId) {
+      const cacheKey = cacheKeys.dashboard(this.organizationId, startDate, endDate);
+      apiCache.set(cacheKey, result, 5000);
+    }
+
+    return result;
   }
+
 
   // --- Growth Data ---
 
   async getGrowthData(startDate?: string, endDate?: string) {
     // Ensure organization_id is set
     await this.ensureOrganizationId();
+
+    // Check cache first
+    if (this.organizationId) {
+      const cacheKey = cacheKeys.growth(this.organizationId, startDate, endDate);
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
 
     // Fetch executions using started_at for consistency with Dashboard
     const executions = await this.supabaseFetch<Execution[]>('executions', {
@@ -414,7 +443,15 @@ class ApiService {
       })),
     };
 
-    return { kpis, wins, valueCreated, escalationSummary };
+    const result = { kpis, wins, valueCreated, escalationSummary };
+
+    // Cache the result for 5 seconds
+    if (this.organizationId) {
+      const cacheKey = cacheKeys.growth(this.organizationId, startDate, endDate);
+      apiCache.set(cacheKey, result, 5000);
+    }
+
+    return result;
   }
 
 
@@ -662,19 +699,31 @@ class ApiService {
     // Ensure organization_id is set
     await this.ensureOrganizationId();
 
-    // 1. Fetch from 'escalations' (dedicated table) - PRIMARY SOURCE for User Status
-    const escalationsRes = await this.supabaseFetch<Escalation[]>('escalations', {
-      range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
-      order: { column: 'created_at', ascending: false }
-    });
-    console.log('[API] 📋 Escalations table returned:', escalationsRes?.length || 0, 'records');
+    // Check cache first (shorter TTL for escalations as they change more frequently)
+    if (this.organizationId) {
+      const cacheKey = cacheKeys.escalations(this.organizationId, status, startDate, endDate);
+      const cached = apiCache.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+    }
 
-    // 2. Fetch from 'executions' - SOURCE for Metadata/History
-    const allExecutions = await this.supabaseFetch<Execution[]>('executions', {
-      range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
-      order: { column: 'created_at', ascending: false },
-      limit: 500
-    });
+    // OPTIMIZATION: Fetch both tables in parallel instead of sequentially
+    const [escalationsRes, allExecutions] = await Promise.all([
+      // 1. Fetch from 'escalations' (dedicated table) - PRIMARY SOURCE for User Status
+      this.supabaseFetch<Escalation[]>('escalations', {
+        range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
+        order: { column: 'created_at', ascending: false }
+      }),
+      // 2. Fetch from 'executions' - SOURCE for Metadata/History
+      this.supabaseFetch<Execution[]>('executions', {
+        range: startDate || endDate ? { column: 'created_at', start: startDate, end: endDate } : undefined,
+        order: { column: 'created_at', ascending: false },
+        limit: 500
+      })
+    ]);
+
+    console.log('[API] 📋 Escalations table returned:', escalationsRes?.length || 0, 'records');
     console.log('[API] 📋 Executions table returned:', allExecutions?.length || 0, 'records');
 
     const isMock = (id?: string) => id?.startsWith('hist-') || id?.startsWith('test-');
@@ -806,6 +855,13 @@ class ApiService {
     filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
     console.log('[API] 📋 Unified smart merge result:', filtered.length, 'records');
+
+    // Cache the result for 3 seconds (shorter TTL for more dynamic data)
+    if (this.organizationId) {
+      const cacheKey = cacheKeys.escalations(this.organizationId, status, startDate, endDate);
+      apiCache.set(cacheKey, filtered, 3000);
+    }
+
     return filtered;
   }
 

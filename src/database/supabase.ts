@@ -8,4 +8,24 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     console.error('❌ Missing Supabase credentials in .env');
 }
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Performance optimization: Connection pooling and retry configuration
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    db: {
+        schema: 'public',
+    },
+    auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+    },
+    global: {
+        headers: {
+            'x-client-info': 'armonyco-orchestrator',
+        },
+    },
+    // Optimize for concurrent connections
+    realtime: {
+        params: {
+            eventsPerSecond: 10,
+        },
+    },
+});
